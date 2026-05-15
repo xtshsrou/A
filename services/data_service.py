@@ -60,24 +60,25 @@ def _strip_prefix(code: str) -> str:
     return code[2:] if code[:2] in ("sh", "sz", "bj") else code
 
 
-def _parse_sina_quote(code: str, text: str):
+def _parse_tencent_quote(code: str, text: str):
     try:
-        data = text.split("=\"")[1].split("\"")[0].split(",")
-        if len(data) < 32 or data[0] == "":
+        data = text.split("=\"")[1].split("\"")[0].split("~")
+        if len(data) < 10:
             return None
+        name = data[1]
         price = float(data[3]) if data[3] else 0
-        prev_close = float(data[2]) if data[2] else 0
+        prev_close = float(data[4]) if data[4] else 0
         change_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close > 0 else 0
         return {
             "code": code,
-            "name": data[0],
+            "name": name,
             "price": price,
-            "open": float(data[1]) if data[1] else 0,
-            "high": float(data[4]) if data[4] else 0,
-            "low": float(data[5]) if data[5] else 0,
+            "open": float(data[5]) if data[5] else 0,
+            "high": float(data[7]) if data[7] else 0,
+            "low": float(data[8]) if data[8] else 0,
             "prev_close": prev_close,
-            "volume": int(float(data[8])) if data[8] else 0,
-            "amount": float(data[9]) if data[9] else 0,
+            "volume": int(data[6]) * 100 if data[6] else 0,
+            "amount": float(data[9]) * 10000 if data[9] else 0,
             "change_pct": change_pct,
             "turnover_rate": 0,
             "amplitude": 0,
@@ -91,14 +92,13 @@ def _parse_sina_quote(code: str, text: str):
 
 async def fetch_realtime_quote(code: str):
     symbol = _add_prefix(code)
-    url = f"http://hq.sinajs.cn/list={symbol}"
-    headers = {"Referer": "https://finance.sina.com.cn"}
+    url = f"http://qt.gtimg.cn/q={symbol}"
     for attempt in range(_MAX_RETRIES):
         try:
-            async with aiohttp.ClientSession(headers=headers) as session:
+            async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    text = await resp.text()
-                    result = _parse_sina_quote(code, text)
+                    text = await resp.text(encoding="gbk")
+                    result = _parse_tencent_quote(code, text)
                     if result:
                         return result
                     logger.warning(f"Empty result for {code} (attempt {attempt+1})")
