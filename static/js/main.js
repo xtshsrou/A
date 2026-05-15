@@ -2,10 +2,42 @@ let stocks = [];
 let alerts = [];
 let autoRefreshInterval = null;
 
+const LS_KEY = 'stock_kanban_watchlist';
+
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
     autoRefreshInterval = setInterval(loadData, 5 * 60 * 1000);
 });
+
+function saveWatchlistToLS(codes) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(codes)); } catch (e) {}
+}
+
+function loadWatchlistFromLS() {
+    try {
+        const v = localStorage.getItem(LS_KEY);
+        return v ? JSON.parse(v) : [];
+    } catch (e) { return []; }
+}
+
+async function restoreWatchlistFromLS() {
+    const saved = loadWatchlistFromLS();
+    if (saved.length === 0) return;
+    const backends = new Set((stocks || []).map(s => s.code));
+    const missing = saved.filter(c => !backends.has(c));
+    if (missing.length === 0) return;
+    for (const code of missing) {
+        try {
+            await fetch(`/api/watchlist/add?code=${code}&name=${code}`, { method: 'POST' });
+        } catch (e) {}
+    }
+    if (missing.length > 0) {
+        const [res] = await Promise.all([fetch('/api/stocks')]);
+        const d = await res.json();
+        stocks = d.stocks;
+        renderKanban();
+    }
+}
 
 async function loadData() {
     try {
@@ -20,6 +52,9 @@ async function loadData() {
         renderKanban();
         renderAlerts();
         updateLastRefresh(stockData.last_refresh);
+
+        saveWatchlistToLS((stocks || []).map(s => s.code));
+        restoreWatchlistFromLS();
 
         const hasData = stocks.some(s => s.quote || s.indicators);
         if (!hasData) {
@@ -391,24 +426,6 @@ async function saveSettings() {
         }
     } catch (e) {
         console.error('Failed to save settings:', e);
-    }
-}
-
-async function saveWatchlistDefault() {
-    try {
-        const res = await fetch('/api/watchlist/export');
-        const data = await res.json();
-        if (data.success) {
-            const el = document.getElementById('watchlistDefaultStatus');
-            el.style.display = 'block';
-            el.innerHTML = `
-                <div style="margin-bottom:6px">✅ 已生成！复制下面内容：</div>
-                <div style="font-size:11px;word-break:break-all;background:#0d1b2a;padding:8px;border-radius:4px;margin-bottom:6px;font-family:monospace">${data.value}</div>
-                <div style="font-size:11px;color:#7a9abf">在 Render 后台 → Environment → 添加 <b>WATCHLIST_DEFAULT</b> 变量，粘贴上述值 → 下次部署自动恢复自选股</div>
-            `;
-        }
-    } catch (e) {
-        console.error('Failed to export watchlist:', e);
     }
 }
 

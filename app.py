@@ -225,18 +225,6 @@ async def api_add_stock(code: str, name: str):
     return {"success": True, "message": f"Added {name}({code})"}
 
 
-@app.get("/api/watchlist/export")
-async def export_watchlist():
-    wl = load_watchlist()
-    pairs = [f'{s["code"]}={s["name"]}' for s in wl]
-    return {
-        "success": True,
-        "value": ",".join(pairs),
-        "watchlist": wl,
-        "hint": "在 Render 后台添加环境变量 WATCHLIST_DEFAULT，值粘贴上述内容。下次部署自动恢复。",
-    }
-
-
 @app.delete("/api/watchlist/{code}")
 async def api_remove_stock(code: str):
     success = remove_stock(code)
