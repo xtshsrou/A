@@ -3,11 +3,11 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from starlette.requests import Request
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
@@ -129,12 +129,11 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="A股回调监控看板", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=f"{BASE_DIR}/static"), name="static")
-templates = Jinja2Templates(directory=f"{BASE_DIR}/templates")
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def index():
+    return HTMLResponse(Path(f"{BASE_DIR}/templates/index.html").read_text(encoding="utf-8"))
 
 
 @app.get("/api/stocks")
