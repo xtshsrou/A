@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: stock-kanban
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /api/stocks

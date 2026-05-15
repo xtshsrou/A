@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股回调监控看板</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <h1>📊 A股回调监控看板</h1>
+            <span class="subtitle" id="lastRefresh">加载中...</span>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-refresh" onclick="manualRefresh()">🔄 刷新</button>
+            <button class="btn btn-alert" onclick="toggleAlerts()">🔔 警报 <span id="alertBadge" class="badge">0</span></button>
+        </div>
+    </header>
+    <div class="score-legend">
+        <span><span class="dot dot-strong"></span> ≥70 建仓</span>
+        <span><span class="dot dot-watch"></span> 50~69 关注</span>
+        <span><span class="dot dot-mild"></span> 30~49 留意</span>
+        <span><span class="dot dot-normal"></span> &lt;30 正常</span>
+        <span style="color:#5a6a7a;font-size:12px;margin-left:8px">| 数字=综合评分，越高回调买入信号越强</span>
+    </div>
+
+    <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="搜索股票代码或名称 (如: 潍柴重机)" onkeydown="if(event.key==='Enter') searchStock()">
+        <button class="btn btn-add" onclick="searchStock()">🔍 搜索</button>
+        <div id="searchResults" class="search-results"></div>
+    </div>
+
+    <main>
+        <div class="kanban" id="kanban">
+            <div class="loading">加载中...</div>
+        </div>
+    </main>
+
+    <div id="alertPanel" class="alert-panel hidden">
+        <div class="alert-header">
+            <h3>🔔 警报记录</h3>
+            <button class="btn btn-small" onclick="clearAlerts()">清空</button>
+            <button class="btn btn-small" onclick="toggleAlerts()">✕</button>
+        </div>
+        <div id="alertList" class="alert-list"></div>
+    </div>
+
+    <div id="stockModal" class="modal hidden">
+        <div class="modal-content" id="modalContent"></div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
