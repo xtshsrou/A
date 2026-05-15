@@ -320,8 +320,29 @@ function renderCard(s) {
                 <span>量比(20日) <span class="val ${vol.vol_ratio < 0.8 ? 'green' : vol.vol_ratio > 1.5 ? 'yellow' : ''}">${fmt(vol.vol_ratio)}</span></span>
             </div>
             <div class="card-signals">${signals}</div>
+            <div class="card-sentiment">${cardSentimentLine(s)}</div>
         </div>
     `;
+}
+
+function cardSentimentLine(s) {
+    const ind = s.indicators || {};
+    const alert = s.alert || {};
+    const qq = s.quote || {};
+    const parts = [];
+    if (ind.patterns && ind.patterns.signal === '低吸信号') parts.push('触发低吸');
+    if (ind.rsi != null && ind.rsi <= 30) parts.push('RSI超卖区');
+    if (qq.pe != null && qq.pe > 0 && qq.pe < 15) parts.push('低估值');
+    else if (qq.pe != null && qq.pe > 60) parts.push('高估值');
+    if (ind.recent_trend === 'down') parts.push('短线偏弱');
+    else if (ind.recent_trend === 'up') parts.push('短线偏强');
+    if (ind.ma && ind.ma.ma5 && ind.ma.ma10) {
+        if (ind.ma.ma5 > ind.ma.ma10) parts.push('均线多头');
+        else parts.push('均线空头');
+    }
+    const txt = parts.length ? parts.join('，') : '暂无明显信号';
+    const label = (txt.includes('低吸') || txt.includes('超卖') || txt.includes('低估值') || txt.includes('多头')) ? '关注' : '中性';
+    return `📰 简判 <span class="sent-${label}">${label}</span> ${txt}`;
 }
 
 function renderAlerts() {
@@ -443,93 +464,210 @@ async function showDetail(code) {
         const todayChange = qq.change_pct != null ? qq.change_pct : (ind.today_change || 0);
         const changeClass = todayChange > 0 ? 'up' : todayChange < 0 ? 'down' : '';
 
+        const a = generateAnalysis(s);
+        const colors = {'🔴':'#e74c3c','🟡':'#f39c12','⚪':'#5a6a7a'};
+        const ac = colors[a.levelIcon] || '#5a6a7a';
+
         const modal = document.getElementById('stockModal');
         document.getElementById('modalContent').innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                 <h2 style="font-size:20px">${s.name} <span style="color:#7a9abf;font-size:14px">${s.code}</span></h2>
-                <button class="btn btn-small" onclick="document.getElementById('stockModal').classList.add('hidden')">✕</button>
+                <button class="btn btn-small" onclick="closeModal()">✕</button>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px;margin-bottom:12px">
                 <div><strong>当前价格:</strong> ¥${price}</div>
                 <div><strong>今日涨幅:</strong> <span class="change ${changeClass}">${todayChange > 0 ? '+' : ''}${todayChange}%</span></div>
                 <div><strong>综合评分:</strong> <span style="color:${alert.score >= 70 ? '#e74c3c' : alert.score >= 50 ? '#f39c12' : '#5a6a7a'}">${alert.score}</span></div>
                 <div><strong>趋势:</strong> ${ind.recent_trend === 'up' ? '上涨' : ind.recent_trend === 'down' ? '下跌' : '震荡'}</div>
             </div>
 
-            <h3 style="margin:16px 0 8px;font-size:14px;color:#7a9abf">均线</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;font-size:13px">
-                <div>MA5: ${ma.ma5 || '--'}</div>
-                <div>MA10: ${ma.ma10 || '--'}</div>
-                <div>MA20: ${ma.ma20 || '--'}</div>
-                <div>MA60: ${ma.ma60 || '--'}</div>
+            <div class="modal-tabs">
+                <button class="tab-btn active" onclick="switchTab(event,'tech')">📊 技术面</button>
+                <button class="tab-btn" onclick="switchTab(event,'news')">📰 消息面</button>
             </div>
 
-            <h3 style="margin:16px 0 8px;font-size:14px;color:#7a9abf">技术指标</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
-                <div>RSI(14): ${rsi ?? '--'}</div>
-                <div>KDJ: ${kdj.k ?? '--'} / ${kdj.d ?? '--'} / ${kdj.j ?? '--'}</div>
-                <div>布林上轨: ${boll.upper || '--'}</div>
-                <div>布林中轨: ${boll.middle || '--'}</div>
-                <div>布林下轨: ${boll.lower || '--'}</div>
-            </div>
-
-            <h3 style="margin:16px 0 8px;font-size:14px;color:#7a9abf">回调分析</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
-                <div>60日高点: ¥${retrace.high_60d || '--'}</div>
-                <div>距高点回撤: ${retrace.retrace_60d || 0}%</div>
-                <div>20日高点: ¥${retrace.high_20d || '--'}</div>
-                <div>距20日高回撤: ${retrace.retrace_20d || 0}%</div>
-            </div>
-
-            <h3 style="margin:16px 0 8px;font-size:14px;color:#7a9abf">量能分析</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
-                <div>量比(20日): ${vol.vol_ratio || '--'}</div>
-                <div>缩量趋势: ${vol.is_shrinking ? '✅ 是' : '❌ 否'}</div>
-            </div>
-
-            ${alert.signals && alert.signals.length > 0 ? `
-            <h3 style="margin:16px 0 8px;font-size:14px;color:#7a9abf">信号</h3>
-            <div style="display:flex;flex-wrap:wrap;gap:4px">
-                ${alert.signals.map(s => `<span class="signal-tag strong">${s}</span>`).join('')}
-            </div>` : ''}
-
-            ${(() => {
-                const a = generateAnalysis(s);
-                const colors = {'🔴':'#e74c3c','🟡':'#f39c12','⚪':'#5a6a7a'};
-                return `
-            <div style="margin-top:16px;padding:12px;background:#1a2332;border-radius:6px;border-left:3px solid ${colors[a.levelIcon] || '#5a6a7a'}">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                    <span style="font-size:14px;font-weight:600;color:#7a9abf">📋 综合解读</span>
-                    <span style="font-size:12px;padding:2px 8px;border-radius:3px;background:${colors[a.levelIcon] || '#5a6a7a'}22;color:${colors[a.levelIcon] || '#5a6a7a'}">${a.levelIcon} ${a.levelLabel}</span>
+            <div id="tabTech" class="tab-panel active">
+                <h3 style="margin:12px 0 8px;font-size:14px;color:#7a9abf">均线</h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;font-size:13px">
+                    <div>MA5: ${ma.ma5 || '--'}</div>
+                    <div>MA10: ${ma.ma10 || '--'}</div>
+                    <div>MA20: ${ma.ma20 || '--'}</div>
+                    <div>MA60: ${ma.ma60 || '--'}</div>
                 </div>
-                <div style="font-size:13px;line-height:1.8">
-                    <div><strong>趋势:</strong> ${a.trendSummary}</div>
-                    <div><strong>布林:</strong> ${a.bollComment}</div>
-                    <div><strong>RSI:</strong> ${a.rsiComment}</div>
-                    <div><strong>KDJ:</strong> ${a.kdjComment}</div>
-                    <div><strong>量能:</strong> ${a.volComment}</div>
-                    <div><strong>回撤:</strong> ${a.retraceComment}</div>
+
+                <h3 style="margin:12px 0 8px;font-size:14px;color:#7a9abf">技术指标</h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+                    <div>RSI(14): ${rsi ?? '--'}</div>
+                    <div>KDJ: ${kdj.k ?? '--'} / ${kdj.d ?? '--'} / ${kdj.j ?? '--'}</div>
+                    <div>布林上轨: ${boll.upper || '--'}</div>
+                    <div>布林中轨: ${boll.middle || '--'}</div>
+                    <div>布林下轨: ${boll.lower || '--'}</div>
                 </div>
-                ${a.conflicts && a.conflicts.length > 0 ? `
-                <div style="margin-top:10px;padding:8px 10px;background:#2a1a1a;border-radius:4px;border-left:3px solid #e67e22;font-size:12px;line-height:1.7">
-                    <div style="font-weight:600;color:#e67e22;margin-bottom:4px">⚠️ 信号矛盾点</div>
-                    ${a.conflicts.map(c => `<div style="color:#dda">• ${c}</div>`).join('')}
+
+                <h3 style="margin:12px 0 8px;font-size:14px;color:#7a9abf">回调分析</h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+                    <div>60日高点: ¥${retrace.high_60d || '--'}</div>
+                    <div>距高点回撤: ${retrace.retrace_60d || 0}%</div>
+                    <div>20日高点: ¥${retrace.high_20d || '--'}</div>
+                    <div>距20日高回撤: ${retrace.retrace_20d || 0}%</div>
+                </div>
+
+                <h3 style="margin:12px 0 8px;font-size:14px;color:#7a9abf">量能分析</h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+                    <div>量比(20日): ${vol.vol_ratio || '--'}</div>
+                    <div>缩量趋势: ${vol.is_shrinking ? '✅ 是' : '❌ 否'}</div>
+                </div>
+
+                ${alert.signals && alert.signals.length > 0 ? `
+                <h3 style="margin:12px 0 8px;font-size:14px;color:#7a9abf">信号</h3>
+                <div style="display:flex;flex-wrap:wrap;gap:4px">
+                    ${alert.signals.map(s => `<span class="signal-tag strong">${s}</span>`).join('')}
                 </div>` : ''}
-                <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a3a4a;font-size:13px;color:#ccddee">
-                    <strong>结论:</strong> ${a.conclusion}
-                </div>
-            </div>`;})()}
 
-            <div style="margin-top:16px;text-align:right;color:#5a6a7a;font-size:11px">
-                ${s.updated_at ? new Date(s.updated_at).toLocaleString('zh-CN') : ''}
+                <div style="margin-top:12px;padding:12px;background:#1a2332;border-radius:6px;border-left:3px solid ${ac}">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <span style="font-size:14px;font-weight:600;color:#7a9abf">📋 综合解读</span>
+                        <span style="font-size:12px;padding:2px 8px;border-radius:3px;background:${ac}22;color:${ac}">${a.levelIcon} ${a.levelLabel}</span>
+                    </div>
+                    <div style="font-size:13px;line-height:1.8">
+                        <div><strong>趋势:</strong> ${a.trendSummary}</div>
+                        <div><strong>布林:</strong> ${a.bollComment}</div>
+                        <div><strong>RSI:</strong> ${a.rsiComment}</div>
+                        <div><strong>KDJ:</strong> ${a.kdjComment}</div>
+                        <div><strong>量能:</strong> ${a.volComment}</div>
+                        <div><strong>回撤:</strong> ${a.retraceComment}</div>
+                    </div>
+                    ${a.conflicts && a.conflicts.length > 0 ? `
+                    <div style="margin-top:10px;padding:8px 10px;background:#2a1a1a;border-radius:4px;border-left:3px solid #e67e22;font-size:12px;line-height:1.7">
+                        <div style="font-weight:600;color:#e67e22;margin-bottom:4px">⚠️ 信号矛盾点</div>
+                        ${a.conflicts.map(c => `<div style="color:#dda">• ${c}</div>`).join('')}
+                    </div>` : ''}
+                    <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a3a4a;font-size:13px;color:#ccddee">
+                        <strong>结论:</strong> ${a.conclusion}
+                    </div>
+                </div>
+
+                <div style="margin-top:12px;text-align:right;color:#5a6a7a;font-size:11px">
+                    ${s.updated_at ? new Date(s.updated_at).toLocaleString('zh-CN') : ''}
+                </div>
+            </div>
+
+            <div id="tabNews" class="tab-panel">
+                <div class="tab-loading">⏳ 加载消息面数据...</div>
             </div>
         `;
         modal.classList.remove('hidden');
-        modal.onclick = (e) => { if (e.target === modal) modal.classList.add('hidden'); };
+        modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+
+        loadNewsData(code, s.name);
     } catch (e) {
         console.error('Failed to load detail:', e);
     }
+}
+
+function closeModal() {
+    document.getElementById('stockModal').classList.add('hidden');
+}
+
+function switchTab(event, tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+}
+
+async function loadNewsData(code, name) {
+    const el = document.getElementById('tabNews');
+    try {
+        const res = await fetch(`/api/stocks/${code}/news`);
+        if (!res.ok) { el.innerHTML = '<div class="tab-loading" style="color:#e74c3c">消息面数据加载失败</div>'; return; }
+        const data = await res.json();
+        el.innerHTML = renderNewsTab(data, name);
+    } catch (e) {
+        el.innerHTML = '<div class="tab-loading" style="color:#e74c3c">消息面数据加载失败: ' + e.message + '</div>';
+    }
+}
+
+function renderNewsTab(data, name) {
+    const sentLabel = data.sentiment_label || '中性';
+    const sentSummary = data.sentiment_summary || '';
+    const sentColor = sentLabel === '利好' ? '#2ecc71' : sentLabel === '利空' ? '#e74c3c' : '#7a9abf';
+
+    const hasNews = data.news && data.news.length > 0;
+    const hasDividend = data.dividend && data.dividend.per_10;
+    const hasConcepts = data.concepts && (data.concepts.industry || data.concepts.concepts?.length);
+    const hasLhb = data.lhb && data.lhb.length > 0;
+    const hasNorthFlow = data.north_flow;
+    const hasLockup = data.lockup && data.lockup.next_releases?.length > 0;
+
+    const sections = [];
+
+    sections.push(`<div class="news-summary">消息面研判 <span style="color:${sentColor};font-weight:600">${sentLabel}</span> ${sentSummary}</div>`);
+
+    if (hasNews) {
+        sections.push('<div class="news-section"><div class="news-section-title">📄 近期公告新闻</div>');
+        for (const a of data.news.slice(0, 10)) {
+            const d = a.date || '';
+            const t = a.title || '';
+            const src = a.source || '';
+            const url = a.url || '';
+            const kw = ['业绩', '涨停', '中标', '合同', '增持', '回购', '分红', '送转', '减产', '预增', '预减', '亏损', '减持', '处罚', '监管', '解禁'];
+            let tag = '';
+            for (const k of kw) { if (t.includes(k)) { tag = k; break; } }
+            const tagHtml = tag ? `<span class="news-tag">${tag}</span>` : '';
+            sections.push(`<div class="news-item">${tagHtml}<span class="news-date">${d}</span><span class="news-title">${t}</span></div>`);
+        }
+        sections.push('</div>');
+    }
+
+    if (hasDividend) {
+        const d = data.dividend;
+        sections.push(`<div class="news-section"><div class="news-section-title">💰 分红股息</div>
+            <div class="news-grid">
+                <div><strong>最新分红:</strong> 10派${d.per_10}元</div>
+                ${d.ex_date ? `<div><strong>除权日:</strong> ${d.ex_date}</div>` : ''}
+                ${d.pay_date ? `<div><strong>派息日:</strong> ${d.pay_date}</div>` : ''}
+            </div></div>`);
+    }
+
+    if (hasConcepts) {
+        const c = data.concepts;
+        sections.push(`<div class="news-section"><div class="news-section-title">🏷️ 概念板块</div>
+            <div class="news-grid">${c.industry ? `<div><strong>行业:</strong> ${c.industry}</div>` : ''}
+            ${c.concepts && c.concepts.length ? `<div><strong>概念:</strong> ${c.concepts.join('、')}</div>` : ''}
+            </div></div>`);
+    }
+
+    if (hasLhb) {
+        sections.push('<div class="news-section"><div class="news-section-title">📊 龙虎榜</div>');
+        for (const l of data.lhb.slice(0, 3)) {
+            sections.push(`<div class="news-item"><span class="news-date">${l.date}</span>${l.reason ? l.reason : ''} 净买入: ¥${l.net_buy?.toFixed(2) || '--'}万</div>`);
+        }
+        sections.push('</div>');
+    }
+
+    if (hasNorthFlow) {
+        sections.push(`<div class="news-section"><div class="news-section-title">🌊 北向资金</div>
+            <div class="news-grid">
+                <div><strong>近5日净流入:</strong> ¥${data.north_flow.net_flow_5d?.toFixed(2) || '--'}万</div>
+                <div><strong>最新日:</strong> ¥${data.north_flow.latest?.toFixed(2) || '--'}万</div>
+            </div></div>`);
+    }
+
+    if (hasLockup) {
+        sections.push('<div class="news-section"><div class="news-section-title">🔒 限售解禁</div>');
+        for (const l of data.lockup.next_releases) {
+            sections.push(`<div class="news-item">${l.date || '待定'} 解禁 ${l.shares || '--'}股 占比${l.pct || '--'}</div>`);
+        }
+        sections.push('</div>');
+    }
+
+    if (!hasNews && !hasDividend && !hasConcepts && !hasLhb && !hasNorthFlow && !hasLockup) {
+        sections.push('<div class="tab-loading">暂无消息面数据，数据源可能暂时不可用</div>');
+    }
+
+    return sections.join('');
 }
 
 function toggleAlerts() {

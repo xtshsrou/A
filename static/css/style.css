@@ -243,7 +243,65 @@ header h1 { font-size: 20px; font-weight: 600; }
     to { transform: translateX(-50%) translateY(0); opacity: 1; }
 }
 
-@media (max-width: 768px) {
+.card-sentiment {
+    font-size: 11px; color: #7a8a9a; margin-top: 6px;
+    padding-top: 6px; border-top: 1px solid #1e2e3e;
+}
+.card-sentiment .sent-关注 { color: #f39c12; }
+.card-sentiment .sent-中性 { color: #7a9abf; }
+
+.modal-tabs {
+    display: flex; gap: 0; margin-bottom: 12px;
+    border-bottom: 1px solid #2a3a4a;
+}
+.tab-btn {
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    background: none; border: none; color: #7a8a9a;
+    cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+.tab-btn.active {
+    color: #e0e6ed; border-bottom-color: #4a7abf;
+    background: rgba(74, 122, 191, 0.08);
+}
+.tab-btn:hover { color: #b0c0d0; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.tab-loading {
+    text-align: center; padding: 40px 0;
+    color: #5a6a7a; font-size: 14px;
+}
+
+.news-summary {
+    font-size: 14px; padding: 10px 12px;
+    background: #0d1b2a; border-radius: 6px;
+    margin-bottom: 12px; line-height: 1.6;
+}
+.news-section {
+    margin-bottom: 12px; padding: 10px 12px;
+    background: #0d1b2a; border-radius: 6px;
+}
+.news-section-title {
+    font-size: 13px; font-weight: 600; color: #7a9abf;
+    margin-bottom: 6px;
+}
+.news-item {
+    font-size: 12px; padding: 4px 0;
+    border-bottom: 1px solid #1e2e3e; color: #c0d0e0;
+    line-height: 1.5;
+}
+.news-item:last-child { border-bottom: none; }
+.news-date { color: #5a6a7a; margin-right: 6px; font-size: 11px; }
+.news-tag {
+    display: inline-block; padding: 0 5px; font-size: 10px;
+    background: #2a3a4a; border-radius: 3px; color: #f39c12;
+    margin-right: 4px;
+}
+.news-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    font-size: 12px; color: #c0d0d0;
+}
     .kanban { grid-template-columns: 1fr; padding: 12px; }
     header { flex-direction: column; gap: 8px; }
     .search-bar input { max-width: 100%; }

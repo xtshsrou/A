@@ -20,6 +20,7 @@ from services.indicator_service import calc_all_indicators, detect_rally, detect
 from services.alert_service import score_pullback_opportunity, add_alert, load_alerts
 from services.watchlist_service import load_watchlist, add_stock, remove_stock
 from services.settings_service import load_settings, save_settings
+from services.news_service import fetch_news_sentiment
 
 DEFAULT_WATCHLIST = [
     {"code": "601872", "name": "招商轮船"},
@@ -263,6 +264,18 @@ async def update_settings(body: dict):
     settings = body.get("settings", body)
     saved = save_settings(settings)
     return {"success": True, "settings": saved}
+
+
+@app.get("/api/stocks/{code}/news")
+async def get_stock_news(code: str):
+    watchlist = load_watchlist()
+    name = code
+    for s in watchlist:
+        if s["code"] == code:
+            name = s["name"]
+            break
+    data = await fetch_news_sentiment(code, name)
+    return data
 
 
 @app.get("/api/debug")
