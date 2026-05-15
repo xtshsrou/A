@@ -14,7 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from config import FETCH_INTERVAL_MINUTES, CHECK_INTERVAL_MINUTES, BASE_DIR
 from services.data_service import (
-    fetch_all_quotes, fetch_realtime_quote, fetch_kline, search_stock
+    fetch_realtime_quote, fetch_kline, search_stock
 )
 from services.indicator_service import calc_all_indicators
 from services.alert_service import score_pullback_opportunity, add_alert, load_alerts
@@ -53,12 +53,10 @@ async def refresh_all_stocks():
         codes = [s["code"] for s in watchlist]
         logger.info(f"Refreshing {len(codes)} stocks: {codes}")
 
-        all_quotes = await fetch_all_quotes()
-
         for s in watchlist:
             code = s["code"]
             try:
-                quote = all_quotes.get(code)
+                quote = await fetch_realtime_quote(code)
                 kline = await fetch_kline(code, 120)
 
                 if kline is not None and not kline.empty:
@@ -121,11 +119,6 @@ async def lifespan(_app: FastAPI):
     scheduler.start()
 
     asyncio.create_task(refresh_all_stocks())
-
-    async def _double_refresh():
-        await asyncio.sleep(30)
-        await refresh_all_stocks()
-    asyncio.create_task(_double_refresh())
 
     yield
     scheduler.shutdown(wait=False)
