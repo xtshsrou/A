@@ -214,6 +214,16 @@ async def search(q: str):
     return {"results": results}
 
 
+@app.get("/api/debug")
+async def debug():
+    return {
+        "cached_count": len(cached_data),
+        "cached_codes": list(cached_data.keys()),
+        "last_refresh": last_refresh,
+        "watchlist": [s["code"] for s in load_watchlist()],
+    }
+
+
 @app.get("/api/refresh")
 async def trigger_refresh():
     await refresh_all_stocks()
