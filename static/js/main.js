@@ -86,9 +86,14 @@ function renderCard(s) {
         </div>`;
     }
 
-    const signals = (alert.signals || []).map(sig =>
-        `<span class="signal-tag ${sig.includes('涨停') || sig.includes('超卖') ? 'strong' : sig.includes('低吸') ? 'buy' : sig.includes('回调') || sig.includes('洗盘') ? 'watch' : ''}">${sig}</span>`
-    ).join('');
+    const signals = (alert.signals || []).map(sig => {
+        let cls = '';
+        if (sig.includes('低吸信号') || sig.includes('涨停') || sig.includes('触')) cls = 'buy';
+        else if (sig.includes('关键均线') || sig.includes('抛压') || sig.includes('底部拐头')) cls = 'strong';
+        else if (sig.includes('支撑') || sig.includes('企稳') || sig.includes('缩量')) cls = 'watch';
+        else if (sig.includes('风险') || sig.includes('过高')) cls = '';
+        return `<span class="signal-tag ${cls}">${sig}</span>`;
+    }).join('');
 
     return `
         <div class="stock-card level-${level}" onclick="showDetail('${s.code}')">

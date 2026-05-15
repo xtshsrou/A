@@ -40,9 +40,9 @@ last_refresh = None
 _refresh_lock = asyncio.Lock()
 
 
-async def refresh_all_stocks():
+async def refresh_all_stocks(force=False):
     global cached_data, last_refresh
-    if _refresh_lock.locked():
+    if not force and _refresh_lock.locked():
         logger.info("Refresh already in progress, skipping")
         return
     async with _refresh_lock:
@@ -275,7 +275,7 @@ async def debug():
 
 @app.get("/api/refresh")
 async def trigger_refresh():
-    await refresh_all_stocks()
+    await refresh_all_stocks(force=True)
     return {"success": True, "last_refresh": last_refresh}
 
 

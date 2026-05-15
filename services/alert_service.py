@@ -22,6 +22,7 @@ def score_pullback_opportunity(indicators: dict) -> dict:
 
     retrace_60d = retracement.get("retrace_60d", 0)
 
+    has_ma_signal = False
     ma_support_score = 0
     ma_support_count = 0
     for period, label in [(5, "MA5"), (10, "MA10"), (20, "MA20"), (60, "MA60")]:
@@ -31,31 +32,36 @@ def score_pullback_opportunity(indicators: dict) -> dict:
             if -3 <= deviation <= 1:
                 ma_support_score += 0.25
                 ma_support_count += 1
-                signals.append(f"接近{label}({ma_val:.2f})")
+                has_ma_signal = True
     details["ma_support_score"] = ma_support_score
 
     retrace_score = 0
+    has_retrace_signal = False
     if retrace_60d >= RETRACEMENT_THRESHOLDS["strong"] * 100:
         retrace_score = 1.0
-        signals.append(f"深度回调{retrace_60d:.1f}%")
+        signals.append(f"深度回撤{retrace_60d:.1f}% 超跌区")
+        has_retrace_signal = True
     elif retrace_60d >= RETRACEMENT_THRESHOLDS["moderate"] * 100:
         retrace_score = 0.7
-        signals.append(f"回调{retrace_60d:.1f}%")
+        signals.append(f"回撤{retrace_60d:.1f}% 支撑区")
+        has_retrace_signal = True
     elif retrace_60d >= RETRACEMENT_THRESHOLDS["mild"] * 100:
         retrace_score = 0.4
-        signals.append(f"小幅回调{retrace_60d:.1f}%")
+        signals.append(f"回撤{retrace_60d:.1f}% 关注企稳")
+        has_retrace_signal = True
     else:
         retrace_score = 0.1
     details["retrace_score"] = retrace_score
 
+    has_rsi_signal = False
     rsi_score = 0
     if rsi_val is not None:
         if rsi_val <= 30:
             rsi_score = 1.0
-            signals.append(f"RSI超卖({rsi_val:.1f})")
+            has_rsi_signal = True
         elif rsi_val <= 40:
             rsi_score = 0.7
-            signals.append(f"RSI偏低({rsi_val:.1f})")
+            has_rsi_signal = True
         elif rsi_val <= 50:
             rsi_score = 0.4
         elif rsi_val >= 80:
@@ -65,21 +71,22 @@ def score_pullback_opportunity(indicators: dict) -> dict:
             rsi_score = 0.2
     details["rsi_score"] = rsi_score
 
+    has_kdj_signal = False
     kdj_score = 0
     k_val = kdj.get("k")
     j_val = kdj.get("j")
     if k_val is not None and j_val is not None:
         if j_val < 0:
             kdj_score = 1.0
-            signals.append(f"KDJ超卖(J={j_val:.1f})")
+            has_kdj_signal = True
         elif j_val < 20:
             kdj_score = 0.7
-            signals.append(f"KDJ偏低(J={j_val:.1f})")
+            has_kdj_signal = True
         elif j_val < 50:
             kdj_score = 0.4
         elif j_val > 100:
             kdj_score = 0
-            signals.append(f"KDJ过高(J={j_val:.1f})")
+            signals.append(f"KDJ过高(J={j_val:.1f})注意风险")
         else:
             kdj_score = 0.2
     details["kdj_score"] = kdj_score
@@ -118,6 +125,26 @@ def score_pullback_opportunity(indicators: dict) -> dict:
         level = "mild"
     else:
         level = "normal"
+
+    buy_conditions = []
+    if has_ma_signal:
+        buy_conditions.append("ma")
+    if has_rsi_signal:
+        buy_conditions.append("rsi")
+    if has_kdj_signal:
+        buy_conditions.append("kdj")
+
+    if len(buy_conditions) >= 2 and has_retrace_signal:
+        signals.clear()
+        signals.append("✅ 回调企稳，触发低吸信号")
+        score = max(score, 60.0)
+    else:
+        if has_ma_signal:
+            signals.append("回踩关键均线")
+        if has_rsi_signal:
+            signals.append(f"抛压释放 RSI({rsi_val:.1f})" if rsi_val else "抛压释放")
+        if has_kdj_signal:
+            signals.append(f"底部拐头信号 KDJ(J={j_val:.1f})" if j_val else "底部拐头信号")
 
     patterns = indicators.get("patterns", {})
     pattern = patterns.get("pattern", "none")
