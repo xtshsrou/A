@@ -81,8 +81,8 @@ function generateAnalysis(s) {
 
     const maVals = [ma.ma5, ma.ma10, ma.ma20, ma.ma60].filter(v => v != null && v > 0);
     const sortedAsc = [...maVals].sort((a, b) => a - b);
-    const allBullish = maVals.length >= 3 && sortedAsc.join(',') === maVals.join(',');
-    const allBearish = maVals.length >= 3 && sortedAsc.reverse().join(',') === maVals.join(',');
+    const allBearish = maVals.length >= 3 && sortedAsc.join(',') === maVals.join(',');
+    const allBullish = maVals.length >= 3 && sortedAsc.reverse().join(',') === maVals.join(',');
     const nearBollLower = boll.lower ? (price - boll.lower) / boll.lower * 100 : null;
 
     const parts = [];
