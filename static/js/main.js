@@ -20,8 +20,14 @@ async function loadData() {
         renderKanban();
         renderAlerts();
         updateLastRefresh(stockData.last_refresh);
+
+        const hasData = stocks.some(s => s.quote || s.indicators);
+        if (!hasData) {
+            setTimeout(loadData, 3000);
+        }
     } catch (e) {
         console.error('Failed to load data:', e);
+        setTimeout(loadData, 5000);
     }
 }
 
