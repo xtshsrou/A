@@ -131,15 +131,15 @@ async def fetch_tencent_financial(code: str) -> Optional[dict]:
         result = {
             "name": data[1] if len(data) > 1 else "",
             "price": float(data[3]) if data[3] else 0,
-            "pe": float(data[30]) if len(data) > 30 and data[30] else None,
-            "amplitude": float(data[31]) if len(data) > 31 and data[31] else None,
-            "circulating_shares": float(data[32]) if len(data) > 32 and data[32] else None,
-            "total_shares": float(data[33]) if len(data) > 33 and data[33] else None,
-            "total_mv": float(data[37]) if len(data) > 37 and data[37] else None,
-            "circulating_mv": float(data[38]) if len(data) > 38 and data[38] else None,
-            "pb": float(data[40]) if len(data) > 40 and data[40] else None,
+            "pe": float(data[39]) if len(data) > 39 and data[39] else None,
+            "pb": float(data[49]) if len(data) > 49 and data[49] else None,
+            "amplitude": float(data[38]) if len(data) > 38 and data[38] else None,
+            "total_mv": float(data[44]) if len(data) > 44 and data[44] else None,
+            "circulating_mv": float(data[45]) if len(data) > 45 and data[45] else None,
             "industry": data[42] if len(data) > 42 and data[42] else None,
             "concept": data[43] if len(data) > 43 and data[43] else None,
+            "high": float(data[33]) if len(data) > 33 and data[33] else None,
+            "low": float(data[34]) if len(data) > 34 and data[34] else None,
         }
         return result
     except (IndexError, ValueError, KeyError) as e:
