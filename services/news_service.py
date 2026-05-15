@@ -41,9 +41,12 @@ async def _http_get(url: str, timeout: int = 8) -> Optional[str]:
 async def fetch_news_articles(code: str) -> list:
     symbol = _ADD_PREFIX(code).upper()
 
+    _NAV = {"财经首页", "股票", "基金", "港股", "美股", "期货", "外汇", "贵金属", "债券", "大盘",
+            "新闻", "行情", "数据", "板块", "个股", "自选股", "更多", "返回", "首页", "财经"}
+
     urls = [
-        f"https://vip.stock.finance.sina.com.cn/corp/go.php/vCB_AllNewsStock/symbol/{symbol}.phtml",
         f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/NewsCNService.getStockNews?code={symbol}&num=10",
+        f"https://vip.stock.finance.sina.com.cn/corp/go.php/vCB_AllNewsStock/symbol/{symbol}.phtml",
     ]
 
     for url in urls:
@@ -51,29 +54,34 @@ async def fetch_news_articles(code: str) -> list:
         if not text:
             continue
 
-        if url.endswith(".phtml"):
-            titles = re.findall(r'<a[^>]*target="_blank"[^>]*>([^<]+)</a>', text)
-            dates = re.findall(r'(\d{4}-\d{2}-\d{2})', text)
-            articles = []
-            for i, t in enumerate(titles):
-                d = dates[i] if i < len(dates) else ""
-                articles.append({"title": t.strip(), "date": d, "source": "新浪财经", "url": ""})
-            if articles:
-                return articles[:15]
-        else:
+        if "json_v2" in url:
             try:
                 raw = text.strip()
                 if raw.startswith("["):
                     data = json.loads(raw)
                     articles = []
                     for item in data[:15]:
-                        t = item.get("title", item.get("text", "")) or ""
+                        t = (item.get("title", "") or item.get("text", "") or "").strip()
+                        if not t or t in _NAV:
+                            continue
                         d = str(item.get("date", ""))[:10]
-                        articles.append({"title": t, "date": d, "source": "新浪财经", "url": item.get("url", "") or item.get("sourceUrl", "")})
+                        articles.append({"title": t, "date": d, "source": "新浪财经"})
                     if articles:
                         return articles
             except (json.JSONDecodeError, Exception):
                 continue
+        else:
+            titles = re.findall(r'<a[^>]*target="_blank"[^>]*>([^<]+)</a>', text)
+            dates = re.findall(r'(\d{4}-\d{2}-\d{2})', text)
+            articles = []
+            for i, t in enumerate(titles):
+                t = t.strip()
+                if not t or t in _NAV:
+                    continue
+                d = dates[i] if i < len(dates) else ""
+                articles.append({"title": t, "date": d, "source": "新浪财经"})
+            if articles:
+                return articles[:15]
 
     return []
 
