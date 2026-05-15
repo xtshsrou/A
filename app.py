@@ -122,6 +122,11 @@ async def lifespan(_app: FastAPI):
 
     asyncio.create_task(refresh_all_stocks())
 
+    async def _double_refresh():
+        await asyncio.sleep(30)
+        await refresh_all_stocks()
+    asyncio.create_task(_double_refresh())
+
     yield
     scheduler.shutdown(wait=False)
 
