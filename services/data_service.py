@@ -4,6 +4,7 @@ from datetime import datetime
 
 import akshare as ak
 import pandas as pd
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -60,20 +61,29 @@ def _strip_prefix(code: str) -> str:
 
 
 async def fetch_realtime_quote(code: str):
-    async with _RATE_LIMIT_SEMAPHORE:
+    symbol = _add_prefix(code)
+    url = f"http://hq.sinajs.cn/list={symbol}"
+    headers = {"Referer": "https://finance.sina.com.cn"}
+    for attempt in range(_MAX_RETRIES):
         try:
-            df = await _run_with_retry(ak.stock_zh_a_spot)
-            if df is None or df.empty:
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    text = await resp.text()
+                    result = _parse_sina_quote(code, text)
+                    if result:
+                        return result
+                    logger.warning(f"Empty result for {code} (attempt {attempt+1})")
+        except (ConnectionError, TimeoutError, OSError) as e:
+            logger.warning(f"Attempt {attempt+1}/{_MAX_RETRIES} failed for {code}: {e}")
+            if attempt < _MAX_RETRIES - 1:
+                await asyncio.sleep(1.5 ** attempt)
+            else:
+                logger.error(f"Failed to fetch quote for {code}: {e}")
                 return None
-            row = df[df["代码"] == _add_prefix(code)]
-            if row.empty:
-                row = df[df["代码"].str.endswith(code)]
-            if row.empty:
-                return None
-            return _extract_quote_row(row.iloc[0], code)
         except Exception as e:
             logger.error(f"Failed to fetch quote for {code}: {e}")
             return None
+    return None
 
 
 async def fetch_all_quotes() -> dict:
