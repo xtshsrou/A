@@ -394,6 +394,24 @@ async function saveSettings() {
     }
 }
 
+async function saveWatchlistDefault() {
+    try {
+        const res = await fetch('/api/watchlist/export');
+        const data = await res.json();
+        if (data.success) {
+            const el = document.getElementById('watchlistDefaultStatus');
+            el.style.display = 'block';
+            el.innerHTML = `
+                <div style="margin-bottom:6px">✅ 已生成！复制下面内容：</div>
+                <div style="font-size:11px;word-break:break-all;background:#0d1b2a;padding:8px;border-radius:4px;margin-bottom:6px;font-family:monospace">${data.value}</div>
+                <div style="font-size:11px;color:#7a9abf">在 Render 后台 → Environment → 添加 <b>WATCHLIST_DEFAULT</b> 变量，粘贴上述值 → 下次部署自动恢复自选股</div>
+            `;
+        }
+    } catch (e) {
+        console.error('Failed to export watchlist:', e);
+    }
+}
+
 function toggleSettings() {
     document.getElementById('settingsPanel').classList.toggle('hidden');
     if (!document.getElementById('settingsPanel').classList.contains('hidden')) {

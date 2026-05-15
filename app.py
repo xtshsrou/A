@@ -12,7 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
-from config import FETCH_INTERVAL_MINUTES, CHECK_INTERVAL_MINUTES, BASE_DIR
+from config import FETCH_INTERVAL_MINUTES, CHECK_INTERVAL_MINUTES, BASE_DIR, ENV_WATCHLIST
 from services.data_service import (
     fetch_realtime_quote, fetch_kline, search_stock, load_kline_cache
 )
@@ -135,9 +135,11 @@ def _load_from_kline_cache(watchlist: list):
 async def lifespan(_app: FastAPI):
     watchlist = load_watchlist()
     existing_codes = {s["code"] for s in watchlist}
-    for s in DEFAULT_WATCHLIST:
+    seed_list = ENV_WATCHLIST if ENV_WATCHLIST else DEFAULT_WATCHLIST
+    for s in seed_list:
         if s["code"] not in existing_codes:
-            add_stock(s["code"], s["name"])
+            name = s["name"] or s["code"]
+            add_stock(s["code"], name)
 
     _load_from_kline_cache(load_watchlist())
 
@@ -230,6 +232,18 @@ async def api_remove_stock(code: str):
         raise HTTPException(status_code=404, detail="Stock not found in watchlist")
     cached_data.pop(code, None)
     return {"success": True, "message": f"Removed {code}"}
+
+
+@app.get("/api/watchlist/export")
+async def export_watchlist():
+    wl = load_watchlist()
+    pairs = [f'{s["code"]}={s["name"]}' for s in wl]
+    return {
+        "success": True,
+        "value": ",".join(pairs),
+        "watchlist": wl,
+        "hint": "在 Render 后台添加环境变量 WATCHLIST_DEFAULT，值粘贴上述内容。下次部署自动恢复。",
+    }
 
 
 @app.get("/api/alerts")

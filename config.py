@@ -14,6 +14,17 @@ CHECK_INTERVAL_MINUTES = 5
 PULLBACK_LOOKBACK_DAYS = 60
 MAX_ALERTS = 200
 
+_ENV_WATCHLIST = os.environ.get("WATCHLIST_DEFAULT", "")
+ENV_WATCHLIST: list[dict] = []
+if _ENV_WATCHLIST:
+    for pair in _ENV_WATCHLIST.split(","):
+        pair = pair.strip()
+        if "=" in pair:
+            code, name = pair.split("=", 1)
+            ENV_WATCHLIST.append({"code": code.strip(), "name": name.strip()})
+        elif pair:
+            ENV_WATCHLIST.append({"code": pair, "name": ""})
+
 INDICATOR_WEIGHTS = {
     "ma_support": 0.25,
     "retracement": 0.30,
