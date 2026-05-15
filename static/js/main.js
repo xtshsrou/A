@@ -57,8 +57,8 @@ function renderCard(s) {
     const level = alert.level || 'normal';
     const score = alert.score || 0;
 
-    const price = ind.price || quote.price || '--';
-    const changePct = ind.today_change || quote.change_pct || 0;
+    const price = quote.price || ind.price || '--';
+    const changePct = quote.change_pct != null ? quote.change_pct : (ind.today_change || 0);
     const changeClass = changePct > 0 ? 'up' : changePct < 0 ? 'down' : '';
 
     const ma = ind.ma || {};
@@ -203,7 +203,10 @@ async function showDetail(code) {
         const boll = ind.bollinger || {};
         const kdj = ind.kdj || {};
         const rsi = ind.rsi;
-        const price = ind.price || '--';
+        const qq = s.quote || {};
+        const price = qq.price || ind.price || '--';
+        const todayChange = qq.change_pct != null ? qq.change_pct : (ind.today_change || 0);
+        const changeClass = todayChange > 0 ? 'up' : todayChange < 0 ? 'down' : '';
 
         const modal = document.getElementById('stockModal');
         document.getElementById('modalContent').innerHTML = `
@@ -214,7 +217,7 @@ async function showDetail(code) {
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px">
                 <div><strong>当前价格:</strong> ¥${price}</div>
-                <div><strong>今日涨幅:</strong> <span class="${ind.today_change > 0 ? 'change up' : 'change down'}">${ind.today_change > 0 ? '+' : ''}${ind.today_change}%</span></div>
+                <div><strong>今日涨幅:</strong> <span class="change ${changeClass}">${todayChange > 0 ? '+' : ''}${todayChange}%</span></div>
                 <div><strong>综合评分:</strong> <span style="color:${alert.score >= 70 ? '#e74c3c' : alert.score >= 50 ? '#f39c12' : '#5a6a7a'}">${alert.score}</span></div>
                 <div><strong>趋势:</strong> ${ind.recent_trend === 'up' ? '上涨' : ind.recent_trend === 'down' ? '下跌' : '震荡'}</div>
             </div>
