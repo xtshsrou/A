@@ -60,6 +60,35 @@ def _strip_prefix(code: str) -> str:
     return code[2:] if code[:2] in ("sh", "sz", "bj") else code
 
 
+def _parse_sina_quote(code: str, text: str):
+    try:
+        data = text.split("=\"")[1].split("\"")[0].split(",")
+        if len(data) < 32 or data[0] == "":
+            return None
+        price = float(data[3]) if data[3] else 0
+        prev_close = float(data[2]) if data[2] else 0
+        change_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close > 0 else 0
+        return {
+            "code": code,
+            "name": data[0],
+            "price": price,
+            "open": float(data[1]) if data[1] else 0,
+            "high": float(data[4]) if data[4] else 0,
+            "low": float(data[5]) if data[5] else 0,
+            "prev_close": prev_close,
+            "volume": int(float(data[8])) if data[8] else 0,
+            "amount": float(data[9]) if data[9] else 0,
+            "change_pct": change_pct,
+            "turnover_rate": 0,
+            "amplitude": 0,
+            "pe": 0,
+            "total_mv": 0,
+            "update_time": datetime.now().isoformat(),
+        }
+    except (IndexError, ValueError, KeyError):
+        return None
+
+
 async def fetch_realtime_quote(code: str):
     symbol = _add_prefix(code)
     url = f"http://hq.sinajs.cn/list={symbol}"
@@ -104,8 +133,10 @@ async def fetch_all_quotes() -> dict:
             return {}
 
 
+_KLINE_SEMAPHORE = asyncio.Semaphore(3)
+
 async def fetch_kline(code: str, days: int = 120):
-    async with _RATE_LIMIT_SEMAPHORE:
+    async with _KLINE_SEMAPHORE:
         try:
             symbol = _add_prefix(code)
             df = await _run_with_retry(

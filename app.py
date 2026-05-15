@@ -53,7 +53,7 @@ async def refresh_all_stocks():
         codes = [s["code"] for s in watchlist]
         logger.info(f"Refreshing {len(codes)} stocks: {codes}")
 
-        for s in watchlist:
+        async def _refresh_one(s):
             code = s["code"]
             try:
                 quote = await fetch_realtime_quote(code)
@@ -90,6 +90,8 @@ async def refresh_all_stocks():
                         }
             except Exception as e:
                 logger.error(f"Error refreshing {code}: {e}")
+
+        await asyncio.gather(*[_refresh_one(s) for s in watchlist])
 
         last_refresh = datetime.now().isoformat()
         logger.info(f"Refresh complete at {last_refresh}")
