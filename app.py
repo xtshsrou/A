@@ -225,15 +225,6 @@ async def api_add_stock(code: str, name: str):
     return {"success": True, "message": f"Added {name}({code})"}
 
 
-@app.delete("/api/watchlist/{code}")
-async def api_remove_stock(code: str):
-    success = remove_stock(code)
-    if not success:
-        raise HTTPException(status_code=404, detail="Stock not found in watchlist")
-    cached_data.pop(code, None)
-    return {"success": True, "message": f"Removed {code}"}
-
-
 @app.get("/api/watchlist/export")
 async def export_watchlist():
     wl = load_watchlist()
@@ -244,6 +235,15 @@ async def export_watchlist():
         "watchlist": wl,
         "hint": "在 Render 后台添加环境变量 WATCHLIST_DEFAULT，值粘贴上述内容。下次部署自动恢复。",
     }
+
+
+@app.delete("/api/watchlist/{code}")
+async def api_remove_stock(code: str):
+    success = remove_stock(code)
+    if not success:
+        raise HTTPException(status_code=404, detail="Stock not found in watchlist")
+    cached_data.pop(code, None)
+    return {"success": True, "message": f"Removed {code}"}
 
 
 @app.get("/api/alerts")
