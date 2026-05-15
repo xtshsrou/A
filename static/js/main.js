@@ -66,6 +66,112 @@ async function loadData() {
     }
 }
 
+function generateAnalysis(s) {
+    const ind = s.indicators || {};
+    const alert = s.alert || {};
+    const qq = s.quote || {};
+    const ma = ind.ma || {};
+    const retrace = ind.retracement || {};
+    const vol = ind.volume || {};
+    const boll = ind.bollinger || {};
+    const kdj = ind.kdj || {};
+    const rsi = ind.rsi;
+    const price = qq.price || ind.price || 0;
+    const patterns = ind.patterns || {};
+
+    const maVals = [ma.ma5, ma.ma10, ma.ma20, ma.ma60].filter(v => v != null && v > 0);
+    const sortedAsc = [...maVals].sort((a, b) => a - b);
+    const allBullish = maVals.length >= 3 && sortedAsc.join(',') === maVals.join(',');
+    const allBearish = maVals.length >= 3 && sortedAsc.reverse().join(',') === maVals.join(',');
+    const nearBollLower = boll.lower ? (price - boll.lower) / boll.lower * 100 : null;
+
+    const parts = [];
+
+    const level = alert.level || 'normal';
+    const score = alert.score || 0;
+    let levelLabel, levelIcon;
+    if (level === 'strong') { levelLabel = '强信号'; levelIcon = '🔴'; }
+    else if (level === 'watch') { levelLabel = '中等信号'; levelIcon = '🟡'; }
+    else if (level === 'mild') { levelLabel = '弱信号'; levelIcon = '🟡'; }
+    else { levelLabel = '无信号'; levelIcon = '⚪'; }
+
+    let trendSummary = '';
+    if (allBullish) trendSummary = '完全多头排列（均线向上发散，趋势强势）';
+    else if (allBearish) trendSummary = '完全空头排列（跌破所有均线，趋势向下）';
+    else if (ma.ma5 && ma.ma10 && ma.ma5 > ma.ma10) trendSummary = '短多长空（MA5在MA10上方，短线企稳但中长期仍承压）';
+    else if (ma.ma5 && ma.ma10 && ma.ma5 < ma.ma10) trendSummary = '短空长多（MA5在MA10下方，短线偏弱）';
+    else trendSummary = '均线交织，方向不明';
+
+    let bollComment = '';
+    if (boll.upper && boll.lower) {
+        if (price >= boll.upper * 0.98) bollComment = '逼近布林上轨，超买区';
+        else if (price <= boll.lower * 1.02) bollComment = '接近布林下轨，处于相对低位';
+        else if (price <= boll.middle) bollComment = '运行于中轨下方，偏弱';
+        else bollComment = '运行于中轨上方，偏强';
+    }
+
+    let rsiComment = '';
+    if (rsi != null) {
+        if (rsi <= 30) rsiComment = '进入超卖区，存在反弹修复动能';
+        else if (rsi <= 40) rsiComment = '接近超卖区，空方力量逐步衰竭';
+        else if (rsi >= 70) rsiComment = '进入超买区，注意回调风险';
+        else if (rsi >= 60) rsiComment = '偏强运行';
+        else rsiComment = '中性区域';
+    }
+
+    let kdjComment = '';
+    const jVal = kdj.j;
+    if (jVal != null) {
+        if (jVal < 0) kdjComment = 'J值严重超卖，短期空方力量释放';
+        else if (jVal < 20) kdjComment = 'J值偏低，超卖区域';
+        else if (jVal > 100) kdjComment = 'J值过高，超买风险';
+        else if (jVal > 80) kdjComment = 'J值偏高';
+        else kdjComment = '中性';
+    }
+
+    let volComment = '';
+    const volRatio = vol.vol_ratio;
+    if (volRatio != null) {
+        if (vol.is_shrinking) volComment = `量能递减中（量比${volRatio}），缩量整理`;
+        else if (volRatio < 0.8) volComment = `缩量（量比${volRatio}），抛压减弱`;
+        else if (volRatio > 1.5) volComment = `放量（量比${volRatio}），资金活跃`;
+        else volComment = `量能正常（量比${volRatio}）`;
+    }
+
+    const retrace60d = retrace.retrace_60d;
+    let retraceComment = '';
+    if (retrace60d != null) {
+        if (retrace60d >= 30) retraceComment = '深度回撤，超跌反弹预期较强';
+        else if (retrace60d >= 20) retraceComment = '中期回调中，关注支撑确认';
+        else if (retrace60d >= 10) retraceComment = '小幅回调，趋势尚可';
+        else retraceComment = '接近60日高点，趋势偏强';
+    }
+
+    const patLabel = patterns.label || '';
+    const patSignal = patterns.signal || '';
+    let conclusion = '';
+    if (patSignal === '低吸信号') {
+        conclusion = `当前触发「${patLabel}」低吸信号，支撑位附近缩量企稳，符合买入条件。建议分仓介入，以支撑位下方${patLabel === '短线回调' ? '3%' : '5%'}设止损。`;
+    } else if (alert.score >= 60) {
+        conclusion = '多项技术指标共振，回调进入价值区域，但缺乏「量能验证」。建议等待缩量企稳信号确认后再评估。';
+    } else if (rsi != null && rsi <= 40) {
+        conclusion = '当前仅满足"技术超卖"条件，不符合「缩量回调+回踩关键支撑」的强信号标准。反弹大概率为修复性脉冲，非趋势低吸机会，建议观望。';
+    } else if (allBearish) {
+        conclusion = '均线空头排列，趋势偏弱，不建议左侧抄底。等待底部放量企稳信号出现后再评估。';
+    } else {
+        conclusion = '当前无明确信号。等待拉升-回调形态形成后再评估低吸机会。';
+    }
+
+    return {
+        levelLabel, levelIcon,
+        trendSummary, bollComment,
+        rsiComment, kdjComment,
+        volComment, retraceComment,
+        conclusion,
+        maShort: ma.ma5 != null && ma.ma10 != null,
+    };
+}
+
 function updateLastRefresh(timestamp) {
     const el = document.getElementById('lastRefresh');
     if (timestamp) {
@@ -327,6 +433,28 @@ async function showDetail(code) {
             <div style="display:flex;flex-wrap:wrap;gap:4px">
                 ${alert.signals.map(s => `<span class="signal-tag strong">${s}</span>`).join('')}
             </div>` : ''}
+
+            ${(() => {
+                const a = generateAnalysis(s);
+                const colors = {'🔴':'#e74c3c','🟡':'#f39c12','⚪':'#5a6a7a'};
+                return `
+            <div style="margin-top:16px;padding:12px;background:#1a2332;border-radius:6px;border-left:3px solid ${colors[a.levelIcon] || '#5a6a7a'}">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <span style="font-size:14px;font-weight:600;color:#7a9abf">📋 综合解读</span>
+                    <span style="font-size:12px;padding:2px 8px;border-radius:3px;background:${colors[a.levelIcon] || '#5a6a7a'}22;color:${colors[a.levelIcon] || '#5a6a7a'}">${a.levelIcon} ${a.levelLabel}</span>
+                </div>
+                <div style="font-size:13px;line-height:1.8">
+                    <div><strong>趋势:</strong> ${a.trendSummary}</div>
+                    <div><strong>布林:</strong> ${a.bollComment}</div>
+                    <div><strong>RSI:</strong> ${a.rsiComment}</div>
+                    <div><strong>KDJ:</strong> ${a.kdjComment}</div>
+                    <div><strong>量能:</strong> ${a.volComment}</div>
+                    <div><strong>回撤:</strong> ${a.retraceComment}</div>
+                </div>
+                <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a3a4a;font-size:13px;color:#ccddee">
+                    <strong>结论:</strong> ${a.conclusion}
+                </div>
+            </div>`;})()}
 
             <div style="margin-top:16px;text-align:right;color:#5a6a7a;font-size:11px">
                 ${s.updated_at ? new Date(s.updated_at).toLocaleString('zh-CN') : ''}
