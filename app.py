@@ -61,6 +61,10 @@ async def refresh_all_stocks():
 
                 if kline is not None and not kline.empty:
                     indicators = calc_all_indicators(kline)
+                    if quote and quote.get("change_pct") is not None:
+                        indicators["today_change"] = quote["change_pct"]
+                    if quote and quote.get("price"):
+                        indicators["price"] = quote["price"]
                     alert_info = score_pullback_opportunity(indicators)
 
                     stock_data = {
@@ -77,7 +81,7 @@ async def refresh_all_stocks():
                             "score": alert_info["score"],
                             "level": alert_info["level"],
                             "signals": alert_info["signals"],
-                            "price": indicators.get("price", 0),
+                            "price": (quote or {}).get("price") or indicators.get("price", 0),
                         })
                 else:
                     if quote:
