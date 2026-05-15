@@ -83,8 +83,8 @@ header h1 { font-size: 20px; font-weight: 600; }
 .search-result-item .name { color: #e0e6ed; }
 
 .kanban {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 16px; padding: 20px 24px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px; padding: 16px 20px;
 }
 .loading { grid-column: 1 / -1; text-align: center; padding: 60px 0; color: #8899aa; font-size: 16px; }
 
