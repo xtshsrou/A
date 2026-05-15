@@ -6,10 +6,14 @@ from datetime import datetime
 from typing import Optional
 
 import akshare as ak
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
 _SEM = asyncio.Semaphore(4)
+
+_ADD_PREFIX = lambda c: f"sh{c}" if c.startswith(("6", "9")) else f"sz{c}" if c.startswith(("0", "3", "2")) else c
+
 
 async def _run_ak(func, *args, timeout=12, **kwargs):
     async with _SEM:
@@ -19,12 +23,59 @@ async def _run_ak(func, *args, timeout=12, **kwargs):
                 loop.run_in_executor(None, lambda: func(*args, **kwargs)),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
-            logger.warning(f"akshare timeout: {func.__name__}")
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.debug(f"akshare {func.__name__} error: {e}")
             return None
-        except Exception as e:
-            logger.debug(f"akshare error {func.__name__}: {e}")
-            return None
+
+
+async def _http_get(url: str, timeout: int = 8) -> Optional[str]:
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as r:
+                return await r.text()
+    except Exception as e:
+        logger.debug(f"HTTP error {url[:60]}: {e}")
+        return None
+
+
+async def fetch_news_articles(code: str) -> list:
+    symbol = _ADD_PREFIX(code).upper()
+
+    urls = [
+        f"https://vip.stock.finance.sina.com.cn/corp/go.php/vCB_AllNewsStock/symbol/{symbol}.phtml",
+        f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/NewsCNService.getStockNews?code={symbol}&num=10",
+    ]
+
+    for url in urls:
+        text = await _http_get(url)
+        if not text:
+            continue
+
+        if url.endswith(".phtml"):
+            titles = re.findall(r'<a[^>]*target="_blank"[^>]*>([^<]+)</a>', text)
+            dates = re.findall(r'(\d{4}-\d{2}-\d{2})', text)
+            articles = []
+            for i, t in enumerate(titles):
+                d = dates[i] if i < len(dates) else ""
+                articles.append({"title": t.strip(), "date": d, "source": "新浪财经", "url": ""})
+            if articles:
+                return articles[:15]
+        else:
+            try:
+                raw = text.strip()
+                if raw.startswith("["):
+                    data = json.loads(raw)
+                    articles = []
+                    for item in data[:15]:
+                        t = item.get("title", item.get("text", "")) or ""
+                        d = str(item.get("date", ""))[:10]
+                        articles.append({"title": t, "date": d, "source": "新浪财经", "url": item.get("url", "") or item.get("sourceUrl", "")})
+                    if articles:
+                        return articles
+            except (json.JSONDecodeError, Exception):
+                continue
+
+    return []
 
 
 async def fetch_dividend(name: str) -> Optional[dict]:
@@ -60,112 +111,35 @@ async def fetch_dividend(name: str) -> Optional[dict]:
     return None
 
 
-async def fetch_news_articles(code: str) -> list:
+async def fetch_tencent_financial(code: str) -> Optional[dict]:
+    symbol = _ADD_PREFIX(code)
+    text = await _http_get(f"http://qt.gtimg.cn/q={symbol}", timeout=6)
+    if not text:
+        return None
     try:
-        df = await _run_ak(ak.stock_news_report, symbol=code, timeout=10)
-        if df is not None and not df.empty:
-            articles = []
-            today = datetime.now().strftime("%Y-%m-%d")
-            for _, row in df.head(15).iterrows():
-                title = str(row.get("新闻标题", row.get("title", "")))
-                date = str(row.get("发布时间", row.get("date", "")))[:10]
-                source = str(row.get("文章来源", row.get("source", "")))
-                url = str(row.get("新闻网址", row.get("url", "")))
-                articles.append({"title": title, "date": date, "source": source, "url": url})
-            return articles
-    except Exception as e:
-        logger.debug(f"fetch_news_articles error: {e}")
-    try:
-        df = await _run_ak(ak.stock_info_news, symbol=code, timeout=10)
-        if df is not None and not df.empty:
-            articles = []
-            for _, row in df.head(15).iterrows():
-                title = str(row.get("title", ""))
-                date = str(row.get("date", ""))[:10] if row.get("date") else ""
-                url = str(row.get("url", ""))
-                articles.append({"title": title, "date": date, "source": "", "url": url})
-            return articles
-    except Exception as e:
-        logger.debug(f"fetch_news_articles fallback error: {e}")
-    return []
+        data = text.split("=\"")[1].split("\"")[0].split("~")
+        if len(data) < 40:
+            return None
+        result = {
+            "name": data[1] if len(data) > 1 else "",
+            "price": float(data[3]) if data[3] else 0,
+            "pe": float(data[30]) if len(data) > 30 and data[30] else None,
+            "amplitude": float(data[31]) if len(data) > 31 and data[31] else None,
+            "circulating_shares": float(data[32]) if len(data) > 32 and data[32] else None,
+            "total_shares": float(data[33]) if len(data) > 33 and data[33] else None,
+            "total_mv": float(data[37]) if len(data) > 37 and data[37] else None,
+            "circulating_mv": float(data[38]) if len(data) > 38 and data[38] else None,
+            "pb": float(data[40]) if len(data) > 40 and data[40] else None,
+            "industry": data[42] if len(data) > 42 and data[42] else None,
+            "concept": data[43] if len(data) > 43 and data[43] else None,
+        }
+        return result
+    except (IndexError, ValueError, KeyError) as e:
+        logger.debug(f"parse tencent financial error: {e}")
+        return None
 
 
-async def fetch_concepts(code: str) -> Optional[dict]:
-    try:
-        df = await _run_ak(ak.stock_board_concept_name_em, timeout=10)
-        if df is not None and not df.empty:
-            industry = None
-            concepts = []
-            try:
-                ind_df = await _run_ak(ak.stock_board_industry_name_em, timeout=8)
-                if ind_df is not None and not ind_df.empty:
-                    industry = str(ind_df.columns[0])
-            except Exception:
-                pass
-            return {"industry": industry, "concepts": concepts[:8]}
-    except Exception as e:
-        logger.debug(f"fetch_concepts error: {e}")
-    return None
-
-
-async def fetch_lhb(code: str) -> list:
-    try:
-        df = await _run_ak(ak.stock_lhb_detail_em, date=datetime.now().strftime("%Y-%m-%d"), timeout=10)
-        if df is not None and not df.empty:
-
-            matches = df[df["代码"].astype(str).str.contains(code)]
-            results = []
-            for _, row in matches.head(5).iterrows():
-                results.append({
-                    "date": str(row.get("日期", ""))[:10],
-                    "reason": str(row.get("上榜原因", "")),
-                    "net_buy": float(row.get("龙虎榜净买额", 0)),
-                    "total_buy": float(row.get("龙虎榜买入额", 0)),
-                })
-            return results
-    except Exception as e:
-        logger.debug(f"fetch_lhb error: {e}")
-    return []
-
-
-async def fetch_north_flow(code: str) -> Optional[dict]:
-    try:
-        df = await _run_ak(ak.stock_hsgt_north_net_flow_in_em, symbol=code, timeout=10)
-        if df is not None and not df.empty:
-            recent = df.tail(5)
-            return {
-                "net_flow_5d": round(float(recent["value"].sum()), 2),
-                "latest": round(float(recent.iloc[-1]["value"]), 2) if not recent.empty else 0,
-            }
-    except Exception as e:
-        logger.debug(f"fetch_north_flow error: {e}")
-    return None
-
-
-async def fetch_lockup_shares(code: str) -> Optional[dict]:
-    try:
-        df = await _run_ak(ak.stock_restricted_release_queue_szsh, timeout=10)
-        if df is not None and not df.empty:
-            if "股票代码" in df.columns:
-                matches = df[df["股票代码"].astype(str).str.contains(code)]
-            elif "代码" in df.columns:
-                matches = df[df["代码"].astype(str).str.contains(code)]
-            else:
-                return None
-            results = []
-            for _, row in matches.head(3).iterrows():
-                results.append({
-                    "date": str(row.iloc[2])[:10] if len(row) > 2 else "",
-                    "shares": str(row.iloc[3]) if len(row) > 3 else "",
-                    "pct": str(row.iloc[4]) if len(row) > 4 else "",
-                })
-            return {"next_releases": results}
-    except Exception as e:
-        logger.debug(f"fetch_lockup error: {e}")
-    return None
-
-
-def _compute_sentiment(news: list, dividend: Optional[dict], price_change: Optional[float]) -> tuple:
+def _compute_sentiment(news: list, financial: Optional[dict]) -> tuple:
     label = "中性"
     summary_parts = []
 
@@ -179,6 +153,8 @@ def _compute_sentiment(news: list, dividend: Optional[dict], price_change: Optio
     neg_count = 0
     for a in news[:10]:
         t = a.get("title", "")
+        if not t:
+            continue
         for kw in keywords_positive:
             if kw in t:
                 pos_count += 1
@@ -188,50 +164,67 @@ def _compute_sentiment(news: list, dividend: Optional[dict], price_change: Optio
                 neg_count += 1
                 break
 
-    if pos_count > neg_count * 2 and pos_count >= 2:
-        label = "利好"
-        summary_parts.append(f"近期消息偏正面，含{pos_count}条利好")
-    elif neg_count > pos_count * 2 and neg_count >= 2:
-        label = "利空"
-        summary_parts.append(f"近期消息偏负面，含{neg_count}条利空")
+    if news:
+        if pos_count > neg_count and pos_count >= 2:
+            label = "利好"
+            summary_parts.append(f"含{pos_count}条利好公告")
+        elif neg_count > pos_count and neg_count >= 2:
+            label = "利空"
+            summary_parts.append(f"含{neg_count}条利空公告")
+        else:
+            summary_parts.append(f"近期{len(news)}条公告，无明显倾向")
     else:
-        summary_parts.append("近期消息面中性，无重大利好或利空")
+        summary_parts.append("暂无实时新闻数据")
 
-    if dividend and dividend.get("per_10"):
-        summary_parts.append(f"最新分红10派{dividend['per_10']}元")
+    if financial:
+        pe = financial.get("pe")
+        if pe is not None and pe > 0:
+            if pe < 15:
+                summary_parts.append(f"PE={pe} 估值偏低")
+                if label == "中性":
+                    label = "利好"
+            elif pe > 50:
+                summary_parts.append(f"PE={pe} 估值偏高")
+            else:
+                summary_parts.append(f"PE={pe}")
+
+        pb = financial.get("pb")
+        if pb is not None and pb > 0 and pb < 1.5:
+            summary_parts.append("破净/低市净率")
+
+        industry = financial.get("industry")
+        concept = financial.get("concept")
+        if industry and concept:
+            summary_parts.append(f"{industry}")
+        elif industry:
+            summary_parts.append(industry)
 
     return label, "；".join(summary_parts)
 
 
 async def fetch_news_sentiment(code: str, name: str) -> dict:
-    results = {"dividend": None, "news": [], "concepts": None,
-               "lhb": [], "north_flow": None, "lockup": None,
-               "sentiment_label": "中性", "sentiment_summary": ""}
-
     tasks = [
-        fetch_dividend(name),
         fetch_news_articles(code),
-        fetch_concepts(code),
-        fetch_lhb(code),
-        fetch_north_flow(code),
-        fetch_lockup_shares(code),
+        fetch_dividend(name),
+        fetch_tencent_financial(code),
     ]
     outputs = await asyncio.gather(*tasks, return_exceptions=True)
 
-    for i, key in enumerate(["dividend", "news", "concepts", "lhb", "north_flow", "lockup"]):
-        val = outputs[i]
-        if isinstance(val, Exception):
-            logger.debug(f"news_service.{key} failed: {val}")
-        elif val is not None:
-            results[key] = val
+    news = outputs[0] if not isinstance(outputs[0], Exception) and outputs[0] else []
+    dividend = outputs[1] if not isinstance(outputs[1], Exception) and outputs[1] else None
+    financial = outputs[2] if not isinstance(outputs[2], Exception) and outputs[2] else None
 
-    if isinstance(results["news"], list):
-        news_list = results["news"]
-    else:
-        news_list = []
-    div = results["dividend"] if not isinstance(results["dividend"], Exception) else None
-    label, summary = _compute_sentiment(news_list, div, None)
-    results["sentiment_label"] = label
-    results["sentiment_summary"] = summary
+    label, summary = _compute_sentiment(news, financial)
 
-    return results
+    concepts = None
+    if financial and (financial.get("industry") or financial.get("concept")):
+        concepts = {"industry": financial.get("industry"), "concepts": [financial.get("concept")] if financial.get("concept") else []}
+
+    return {
+        "dividend": dividend,
+        "news": news,
+        "concepts": concepts,
+        "financial": financial,
+        "sentiment_label": label,
+        "sentiment_summary": summary,
+    }

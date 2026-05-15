@@ -597,9 +597,7 @@ function renderNewsTab(data, name) {
     const hasNews = data.news && data.news.length > 0;
     const hasDividend = data.dividend && data.dividend.per_10;
     const hasConcepts = data.concepts && (data.concepts.industry || data.concepts.concepts?.length);
-    const hasLhb = data.lhb && data.lhb.length > 0;
-    const hasNorthFlow = data.north_flow;
-    const hasLockup = data.lockup && data.lockup.next_releases?.length > 0;
+    const hasFinancial = data.financial;
 
     const sections = [];
 
@@ -610,13 +608,11 @@ function renderNewsTab(data, name) {
         for (const a of data.news.slice(0, 10)) {
             const d = a.date || '';
             const t = a.title || '';
-            const src = a.source || '';
-            const url = a.url || '';
-            const kw = ['业绩', '涨停', '中标', '合同', '增持', '回购', '分红', '送转', '减产', '预增', '预减', '亏损', '减持', '处罚', '监管', '解禁'];
+            const kw = ['业绩', '涨停', '中标', '合同', '增持', '回购', '分红', '送转', '预增', '预减', '亏损', '减持', '处罚', '监管', '解禁'];
             let tag = '';
             for (const k of kw) { if (t.includes(k)) { tag = k; break; } }
             const tagHtml = tag ? `<span class="news-tag">${tag}</span>` : '';
-            sections.push(`<div class="news-item">${tagHtml}<span class="news-date">${d}</span><span class="news-title">${t}</span></div>`);
+            sections.push(`<div class="news-item">${tagHtml}<span class="news-date">${d}</span>${t}</div>`);
         }
         sections.push('</div>');
     }
@@ -633,38 +629,25 @@ function renderNewsTab(data, name) {
 
     if (hasConcepts) {
         const c = data.concepts;
-        sections.push(`<div class="news-section"><div class="news-section-title">🏷️ 概念板块</div>
+        sections.push(`<div class="news-section"><div class="news-section-title">🏷️ 行业概念</div>
             <div class="news-grid">${c.industry ? `<div><strong>行业:</strong> ${c.industry}</div>` : ''}
-            ${c.concepts && c.concepts.length ? `<div><strong>概念:</strong> ${c.concepts.join('、')}</div>` : ''}
+            ${c.concepts && c.concepts.length ? `<div><strong>概念:</strong> ${c.concepts.filter(Boolean).join('、')}</div>` : ''}
             </div></div>`);
     }
 
-    if (hasLhb) {
-        sections.push('<div class="news-section"><div class="news-section-title">📊 龙虎榜</div>');
-        for (const l of data.lhb.slice(0, 3)) {
-            sections.push(`<div class="news-item"><span class="news-date">${l.date}</span>${l.reason ? l.reason : ''} 净买入: ¥${l.net_buy?.toFixed(2) || '--'}万</div>`);
-        }
-        sections.push('</div>');
+    if (hasFinancial) {
+        const f = data.financial;
+        const finItems = [];
+        if (f.pe != null) finItems.push(`PE ${f.pe}`);
+        if (f.pb != null) finItems.push(`PB ${f.pb}`);
+        if (f.total_mv) finItems.push(`总市值 ¥${(f.total_mv / 1e8).toFixed(1)}亿`);
+        if (f.amplitude) finItems.push(`振幅 ${f.amplitude}%`);
+        sections.push(`<div class="news-section"><div class="news-section-title">📊 基本面数据</div>
+            <div style="font-size:12px;color:#c0d0d0;line-height:1.7">${finItems.join(' | ') || '暂无数据'}</div></div>`);
     }
 
-    if (hasNorthFlow) {
-        sections.push(`<div class="news-section"><div class="news-section-title">🌊 北向资金</div>
-            <div class="news-grid">
-                <div><strong>近5日净流入:</strong> ¥${data.north_flow.net_flow_5d?.toFixed(2) || '--'}万</div>
-                <div><strong>最新日:</strong> ¥${data.north_flow.latest?.toFixed(2) || '--'}万</div>
-            </div></div>`);
-    }
-
-    if (hasLockup) {
-        sections.push('<div class="news-section"><div class="news-section-title">🔒 限售解禁</div>');
-        for (const l of data.lockup.next_releases) {
-            sections.push(`<div class="news-item">${l.date || '待定'} 解禁 ${l.shares || '--'}股 占比${l.pct || '--'}</div>`);
-        }
-        sections.push('</div>');
-    }
-
-    if (!hasNews && !hasDividend && !hasConcepts && !hasLhb && !hasNorthFlow && !hasLockup) {
-        sections.push('<div class="tab-loading">暂无消息面数据，数据源可能暂时不可用</div>');
+    if (!hasNews && !hasDividend && !hasConcepts && !hasFinancial) {
+        sections.push('<div class="tab-loading" style="color:#7a9abf;font-size:13px;padding:20px">消息面数据暂不可用（海外节点到国内金融API受限）<br>当前仅展示技术面分析</div>');
     }
 
     return sections.join('');
