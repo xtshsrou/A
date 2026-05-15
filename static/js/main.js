@@ -66,11 +66,28 @@ function renderCard(s) {
     const vol = ind.volume || {};
     const rsi = ind.rsi;
     const kdj = ind.kdj || {};
+    const patterns = ind.patterns || {};
 
     function fmt(v, d = '--') { return v != null && v !== undefined ? v : d; }
 
+    const patLabel = patterns.label || '';
+    const patSignal = patterns.signal || '';
+    const support = patterns.support_level;
+    const supportType = patterns.support_type || '';
+    const patPct = patterns.retrace_pct || patterns.position_in_box;
+    const patClass = patterns.pattern === 'short_term_pullback' ? 'pullback' : patterns.pattern === 'box_consolidation' ? 'consolidation' : '';
+
+    let patHtml = '';
+    if (patLabel && patClass) {
+        const sigClass = patSignal === '低吸信号' ? ' signal-buy' : '';
+        patHtml = `<div class="card-pattern ${patClass}${sigClass}">
+            ${patLabel}${support ? ` · ${supportType}${support}` : ''}${patPct ? ` · ${patPct}%` : ''}
+            ${patSignal ? `<span class="pat-signal">${patSignal}</span>` : ''}
+        </div>`;
+    }
+
     const signals = (alert.signals || []).map(sig =>
-        `<span class="signal-tag ${sig.includes('涨停') || sig.includes('超卖') ? 'strong' : sig.includes('回调') ? 'watch' : ''}">${sig}</span>`
+        `<span class="signal-tag ${sig.includes('涨停') || sig.includes('超卖') ? 'strong' : sig.includes('低吸') ? 'buy' : sig.includes('回调') || sig.includes('洗盘') ? 'watch' : ''}">${sig}</span>`
     ).join('');
 
     return `
@@ -83,6 +100,7 @@ function renderCard(s) {
                 </div>
                 <div class="card-score ${level}">${score}</div>
             </div>
+            ${patHtml}
             <div class="card-price">
                 <span class="price">${fmt(price)}</span>
                 <span class="change ${changeClass}">${changePct > 0 ? '+' : ''}${fmt(changePct)}%</span>
@@ -299,6 +317,77 @@ function showToast(msg, type = '') {
     el.className = `toast ${type}`;
     el.classList.remove('hidden');
     setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+async function loadSettings() {
+    try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        const s = data.settings || {};
+        const map = {
+            s_rally_lookback: 'rally_lookback',
+            s_rally_min_single: 'rally_min_single_gain',
+            s_rally_min_cumulative: 'rally_min_cumulative_gain',
+            s_rally_volume_increase: 'rally_volume_increase',
+            s_pullback_min_days: 'pullback_min_days',
+            s_pullback_max_days: 'pullback_max_days',
+            s_pullback_ma_proximity: 'pullback_ma_proximity',
+            s_consolidation_min_days: 'consolidation_min_days',
+            s_consolidation_max_days: 'consolidation_max_days',
+            s_consolidation_box_position: 'consolidation_box_position',
+            s_volume_shrink_threshold: 'volume_shrink_threshold',
+        };
+        for (const [elId, key] of Object.entries(map)) {
+            const el = document.getElementById(elId);
+            if (el && s[key] != null) el.value = s[key];
+        }
+    } catch (e) {
+        console.error('Failed to load settings:', e);
+    }
+}
+
+async function saveSettings() {
+    const map = {
+        rally_lookback: 's_rally_lookback',
+        rally_min_single_gain: 's_rally_min_single',
+        rally_min_cumulative_gain: 's_rally_min_cumulative',
+        rally_volume_increase: 's_rally_volume_increase',
+        pullback_min_days: 's_pullback_min_days',
+        pullback_max_days: 's_pullback_max_days',
+        pullback_ma_proximity: 's_pullback_ma_proximity',
+        consolidation_min_days: 's_consolidation_min_days',
+        consolidation_max_days: 's_consolidation_max_days',
+        consolidation_box_position: 's_consolidation_box_position',
+        volume_shrink_threshold: 's_volume_shrink_threshold',
+    };
+    const settings = {};
+    for (const [key, elId] of Object.entries(map)) {
+        const el = document.getElementById(elId);
+        if (el) settings[key] = parseFloat(el.value);
+    }
+    try {
+        const res = await fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            const status = document.getElementById('settingsStatus');
+            status.style.display = 'inline';
+            setTimeout(() => { status.style.display = 'none'; }, 2000);
+            manualRefresh();
+        }
+    } catch (e) {
+        console.error('Failed to save settings:', e);
+    }
+}
+
+function toggleSettings() {
+    document.getElementById('settingsPanel').classList.toggle('hidden');
+    if (!document.getElementById('settingsPanel').classList.contains('hidden')) {
+        loadSettings();
+    }
 }
 
 document.addEventListener('click', (e) => {

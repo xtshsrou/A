@@ -16,9 +16,10 @@ from config import FETCH_INTERVAL_MINUTES, CHECK_INTERVAL_MINUTES, BASE_DIR
 from services.data_service import (
     fetch_realtime_quote, fetch_kline, search_stock, load_kline_cache
 )
-from services.indicator_service import calc_all_indicators
+from services.indicator_service import calc_all_indicators, detect_rally, detect_patterns
 from services.alert_service import score_pullback_opportunity, add_alert, load_alerts
 from services.watchlist_service import load_watchlist, add_stock, remove_stock
+from services.settings_service import load_settings, save_settings
 
 DEFAULT_WATCHLIST = [
     {"code": "601872", "name": "招商轮船"},
@@ -46,6 +47,7 @@ async def refresh_all_stocks():
         return
     async with _refresh_lock:
         watchlist = load_watchlist()
+        settings = load_settings()
         if not watchlist:
             logger.info("Watchlist is empty, skipping refresh")
             return
@@ -61,6 +63,10 @@ async def refresh_all_stocks():
 
                 if kline is not None and not kline.empty:
                     indicators = calc_all_indicators(kline)
+                    rally = detect_rally(kline, settings)
+                    patterns = detect_patterns(kline, rally, settings)
+                    indicators["patterns"] = patterns
+
                     if quote and quote.get("change_pct") is not None:
                         indicators["today_change"] = quote["change_pct"]
                     if quote and quote.get("price"):
@@ -103,11 +109,15 @@ async def refresh_all_stocks():
 
 def _load_from_kline_cache(watchlist: list):
     loaded = 0
+    settings = load_settings()
     for s in watchlist:
         code = s["code"]
         kline = load_kline_cache(code)
         if kline is not None and not kline.empty:
             indicators = calc_all_indicators(kline)
+            rally = detect_rally(kline, settings)
+            patterns = detect_patterns(kline, rally, settings)
+            indicators["patterns"] = patterns
             alert_info = score_pullback_opportunity(indicators)
             cached_data[code] = {
                 **s,
@@ -239,6 +249,18 @@ async def clear_alerts():
 async def search(q: str):
     results = await search_stock(q)
     return {"results": results}
+
+
+@app.get("/api/settings")
+async def get_settings():
+    return {"settings": load_settings()}
+
+
+@app.put("/api/settings")
+async def update_settings(body: dict):
+    settings = body.get("settings", body)
+    saved = save_settings(settings)
+    return {"success": True, "settings": saved}
 
 
 @app.get("/api/debug")

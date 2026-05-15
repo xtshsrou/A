@@ -23,12 +23,16 @@ header h1 { font-size: 20px; font-weight: 600; }
 }
 .btn-refresh { background: #1e3a5f; }
 .btn-refresh:hover { background: #2a4a7f; }
+.btn-settings { background: #3a2a4a; }
+.btn-settings:hover { background: #4a3a5a; }
 .btn-alert { background: #2a4a3a; position: relative; }
 .btn-alert:hover { background: #3a5a4a; }
 .btn-add { background: #c17b3c; }
 .btn-add:hover { background: #d48b4c; }
 .btn-small { padding: 4px 10px; font-size: 12px; background: #3a4a5a; }
 .btn-small:hover { background: #4a5a6a; }
+.btn-save { background: #2a6a4a; width: 100%; margin-top: 8px; }
+.btn-save:hover { background: #3a7a5a; }
 .badge {
     background: #e74c3c; color: #fff; border-radius: 10px;
     padding: 1px 7px; font-size: 11px; margin-left: 4px;
@@ -47,6 +51,9 @@ header h1 { font-size: 20px; font-weight: 600; }
 .dot-watch { background: #f39c12; }
 .dot-mild { background: #3498db; }
 .dot-normal { background: #3a4a5a; }
+.dot-pullback { background: #8e44ad; }
+.dot-consolidation { background: #2ecc71; }
+.legend-sep { color: #2a3a4a; font-size: 14px; }
 
 .search-bar {
     padding: 16px 24px; display: flex; gap: 8px;
@@ -125,6 +132,19 @@ header h1 { font-size: 20px; font-weight: 600; }
 .card-indicators .val.yellow { color: #f39c12; }
 .card-indicators .val.blue { color: #3498db; }
 
+.card-pattern {
+    font-size: 12px; padding: 4px 10px; border-radius: 4px;
+    margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+    justify-content: space-between;
+}
+.card-pattern.pullback { background: #2a1a3a; color: #b87ae0; border-left: 3px solid #8e44ad; }
+.card-pattern.consolidation { background: #1a2a2a; color: #5ae0a0; border-left: 3px solid #2ecc71; }
+.card-pattern.signal-buy { background: #2a2a1a; border-left-color: #f39c12; }
+.pat-signal {
+    padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600;
+    background: #f39c12; color: #0d1b2a;
+}
+
 .card-signals {
     display: flex; flex-wrap: wrap; gap: 4px;
 }
@@ -134,6 +154,7 @@ header h1 { font-size: 20px; font-weight: 600; }
 }
 .signal-tag.strong { background: #3a1a1a; color: #e74c3c; }
 .signal-tag.watch { background: #3a2a1a; color: #f39c12; }
+.signal-tag.buy { background: #3a3a1a; color: #f0d050; }
 
 .card-remove {
     position: absolute; top: 8px; right: 8px;
@@ -177,6 +198,32 @@ header h1 { font-size: 20px; font-weight: 600; }
 .alert-name { font-weight: 600; }
 .alert-signal { color: #8899aa; font-size: 12px; }
 .alert-price { font-size: 14px; font-weight: 600; margin: 4px 0; }
+
+.settings-panel {
+    position: fixed; top: 0; left: 0; width: 320px; height: 100%;
+    background: #1a2a3a; border-right: 1px solid #2a3a4a;
+    z-index: 150; padding: 16px; overflow-y: auto;
+    transition: transform 0.3s;
+}
+.settings-panel.hidden { transform: translateX(-100%); }
+.settings-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.settings-header h3 { font-size: 16px; }
+.settings-body { font-size: 13px; }
+.settings-group { margin-bottom: 16px; }
+.settings-group h4 {
+    font-size: 13px; color: #7a9abf; margin-bottom: 8px;
+    padding-bottom: 4px; border-bottom: 1px solid #2a3a4a;
+}
+.settings-group label {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 0; color: #b0c0d0;
+}
+.settings-group input {
+    width: 70px; padding: 4px 8px; border: 1px solid #2a3a4a;
+    border-radius: 4px; background: #0d1b2a; color: #e0e6ed;
+    font-size: 13px; text-align: right; outline: none;
+}
+.settings-group input:focus { border-color: #4a7abf; }
 
 .toast {
     position: fixed; top: 70px; left: 50%; transform: translateX(-50%);

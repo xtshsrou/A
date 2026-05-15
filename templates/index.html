@@ -14,21 +14,59 @@
         </div>
         <div class="header-right">
             <button class="btn btn-refresh" onclick="manualRefresh()">🔄 刷新</button>
+            <button class="btn btn-settings" onclick="toggleSettings()">⚙️ 策略</button>
             <button class="btn btn-alert" onclick="toggleAlerts()">🔔 警报 <span id="alertBadge" class="badge">0</span></button>
         </div>
     </header>
     <div class="score-legend">
-        <span><span class="dot dot-strong"></span> ≥70 建仓</span>
+        <span><span class="dot dot-strong"></span> ≤70 建仓</span>
         <span><span class="dot dot-watch"></span> 50~69 关注</span>
         <span><span class="dot dot-mild"></span> 30~49 留意</span>
         <span><span class="dot dot-normal"></span> &lt;30 正常</span>
-        <span style="color:#5a6a7a;font-size:12px;margin-left:8px">| 数字=综合评分，越高回调买入信号越强</span>
+        <span class="legend-sep">|</span>
+        <span><span class="dot dot-pullback"></span> 短线回调</span>
+        <span><span class="dot dot-consolidation"></span> 横盘洗盘</span>
+        <span style="color:#5a6a7a;font-size:12px">| 数字=综合评分</span>
     </div>
 
     <div class="search-bar">
         <input type="text" id="searchInput" placeholder="搜索股票代码或名称 (如: 潍柴重机)" onkeydown="if(event.key==='Enter') searchStock()">
         <button class="btn btn-add" onclick="searchStock()">🔍 搜索</button>
         <div id="searchResults" class="search-results"></div>
+    </div>
+
+    <div id="settingsPanel" class="settings-panel hidden">
+        <div class="settings-header">
+            <h3>⚙️ 策略参数</h3>
+            <button class="btn btn-small" onclick="toggleSettings()">✕</button>
+        </div>
+        <div class="settings-body">
+            <div class="settings-group">
+                <h4>拉升识别</h4>
+                <label>单日大涨阈值(%) <input type="number" id="s_rally_min_single" step="0.5" min="3" max="15"></label>
+                <label>累计涨幅阈值(%) <input type="number" id="s_rally_min_cumulative" step="1" min="5" max="30"></label>
+                <label>拉升量比阈值 <input type="number" id="s_rally_volume_increase" step="0.1" min="1" max="5"></label>
+                <label>回溯天数 <input type="number" id="s_rally_lookback" step="1" min="10" max="60"></label>
+            </div>
+            <div class="settings-group">
+                <h4>短线回调</h4>
+                <label>最短回调天数 <input type="number" id="s_pullback_min_days" step="1" min="1" max="5"></label>
+                <label>最长回调天数 <input type="number" id="s_pullback_max_days" step="1" min="2" max="10"></label>
+                <label>均线偏离容忍度(%) <input type="number" id="s_pullback_ma_proximity" step="0.5" min="0.5" max="10"></label>
+            </div>
+            <div class="settings-group">
+                <h4>横盘洗盘</h4>
+                <label>最短震荡天数 <input type="number" id="s_consolidation_min_days" step="1" min="3" max="10"></label>
+                <label>最长震荡天数 <input type="number" id="s_consolidation_max_days" step="1" min="5" max="30"></label>
+                <label>箱体底部阈值(%) <input type="number" id="s_consolidation_box_position" step="5" min="5" max="50"></label>
+            </div>
+            <div class="settings-group">
+                <h4>量能</h4>
+                <label>缩量阈值(相对拉升期) <input type="number" id="s_volume_shrink_threshold" step="0.05" min="0.2" max="1.5"></label>
+            </div>
+            <button class="btn btn-save" onclick="saveSettings()">💾 保存参数</button>
+            <span id="settingsStatus" style="font-size:12px;color:#2ecc71;display:none">已保存</span>
+        </div>
     </div>
 
     <main>

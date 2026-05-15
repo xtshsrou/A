@@ -119,12 +119,43 @@ def score_pullback_opportunity(indicators: dict) -> dict:
     else:
         level = "normal"
 
+    patterns = indicators.get("patterns", {})
+    pattern = patterns.get("pattern", "none")
+    if pattern in ("short_term_pullback", "box_consolidation"):
+        pat_label = patterns.get("label", "")
+        pat_signal = patterns.get("signal", "")
+        pat_strength = patterns.get("signal_strength", "normal")
+        support = patterns.get("support_level")
+        support_type = patterns.get("support_type", "")
+        pct = patterns.get("retrace_pct") or patterns.get("position_in_box")
+
+        if pat_signal == "低吸信号":
+            signals.append(f"{pat_label}·{support_type}{support}低吸")
+            if pat_strength == "strong":
+                score = max(score, 70.0)
+                level = "strong"
+            else:
+                score = max(score, 55.0)
+                if level == "normal":
+                    level = "watch"
+        elif pat_signal == "等待缩量":
+            signals.append(f"{pat_label}·回踩{support_type}{support}")
+            score = max(score, 35.0)
+            if level == "normal":
+                level = "mild"
+        else:
+            signals.append(f"{pat_label}·{pat_signal}")
+    elif pattern == "monitoring":
+        pass
+
     today_change = indicators.get("today_change", 0)
     if today_change >= 9.5:
         if level != "strong":
             signals.append(f"⚠涨停({today_change:+.2f}%)")
     elif today_change >= 7:
         signals.append(f"大涨({today_change:+.2f}%)")
+
+    score = min(round(score, 1), 100.0)
 
     return {
         "score": score,
