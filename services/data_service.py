@@ -1,6 +1,9 @@
 import asyncio
+import json
 import logging
+import os
 from datetime import datetime
+from typing import Optional
 
 import akshare as ak
 import pandas as pd
@@ -9,7 +12,9 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 _RATE_LIMIT_SEMAPHORE = asyncio.Semaphore(1)
-_MAX_RETRIES = 3
+_MAX_RETRIES = 2
+_KLINE_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "kline_cache")
+os.makedirs(_KLINE_CACHE_DIR, exist_ok=True)
 
 
 async def _run_with_retry(fn, *args, **kwargs):
@@ -96,7 +101,7 @@ async def fetch_realtime_quote(code: str):
     for attempt in range(_MAX_RETRIES):
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
                     text = await resp.text(encoding="gbk")
                     result = _parse_tencent_quote(code, text)
                     if result:
@@ -133,7 +138,41 @@ async def fetch_all_quotes() -> dict:
             return {}
 
 
-_KLINE_SEMAPHORE = asyncio.Semaphore(3)
+_KLINE_SEMAPHORE = asyncio.Semaphore(6)
+
+
+def _kline_cache_path(code: str) -> str:
+    return os.path.join(_KLINE_CACHE_DIR, f"{code}.json")
+
+
+def save_kline_cache(code: str, df: pd.DataFrame):
+    path = _kline_cache_path(code)
+    try:
+        data = df.to_dict(orient="records")
+        with open(path, "w") as f:
+            json.dump(data, f, default=str)
+    except Exception as e:
+        logger.warning(f"Failed to save kline cache for {code}: {e}")
+
+
+def load_kline_cache(code: str) -> Optional[pd.DataFrame]:
+    path = _kline_cache_path(code)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        df = pd.DataFrame(data)
+        df["date"] = pd.to_datetime(df["date"])
+        for c in ["open", "close", "high", "low"]:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+        df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
+        df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+        return df
+    except Exception as e:
+        logger.warning(f"Failed to load kline cache for {code}: {e}")
+        return None
+
 
 async def fetch_kline(code: str, days: int = 120):
     async with _KLINE_SEMAPHORE:
@@ -153,7 +192,9 @@ async def fetch_kline(code: str, days: int = 120):
                 df[c] = pd.to_numeric(df[c], errors="coerce")
             df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
             df["volume"] = (df["amount"] / ((df["open"] + df["close"]) / 2)).fillna(0).astype("int64")
-            return df[["date", "open", "close", "high", "low", "volume", "amount"]]
+            result = df[["date", "open", "close", "high", "low", "volume", "amount"]]
+            save_kline_cache(code, result)
+            return result
         except Exception as e:
             logger.error(f"Failed to fetch kline for {code}: {e}")
             return None

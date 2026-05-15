@@ -7,3 +7,4 @@ venv/
 .DS_Store
 data/watchlist.json
 data/alerts.json
+data/kline_cache/

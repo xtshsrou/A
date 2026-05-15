@@ -14,7 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from config import FETCH_INTERVAL_MINUTES, CHECK_INTERVAL_MINUTES, BASE_DIR
 from services.data_service import (
-    fetch_realtime_quote, fetch_kline, search_stock
+    fetch_realtime_quote, fetch_kline, search_stock, load_kline_cache
 )
 from services.indicator_service import calc_all_indicators
 from services.alert_service import score_pullback_opportunity, add_alert, load_alerts
@@ -97,6 +97,26 @@ async def refresh_all_stocks():
         logger.info(f"Refresh complete at {last_refresh}")
 
 
+def _load_from_kline_cache(watchlist: list):
+    loaded = 0
+    for s in watchlist:
+        code = s["code"]
+        kline = load_kline_cache(code)
+        if kline is not None and not kline.empty:
+            indicators = calc_all_indicators(kline)
+            alert_info = score_pullback_opportunity(indicators)
+            cached_data[code] = {
+                **s,
+                "quote": None,
+                "indicators": indicators,
+                "alert": alert_info,
+                "updated_at": datetime.now().isoformat(),
+            }
+            loaded += 1
+    if loaded:
+        logger.info(f"Loaded {loaded}/{len(watchlist)} stocks from K-line cache")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     watchlist = load_watchlist()
@@ -104,6 +124,9 @@ async def lifespan(_app: FastAPI):
     for s in DEFAULT_WATCHLIST:
         if s["code"] not in existing_codes:
             add_stock(s["code"], s["name"])
+
+    _load_from_kline_cache(load_watchlist())
+
     logger.info("Starting scheduler...")
 
     scheduler.add_job(
