@@ -100,9 +100,9 @@ async def refresh_all_stocks():
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     watchlist = load_watchlist()
-    if not watchlist:
-        logger.info("Seeding default watchlist")
-        for s in DEFAULT_WATCHLIST:
+    existing_codes = {s["code"] for s in watchlist}
+    for s in DEFAULT_WATCHLIST:
+        if s["code"] not in existing_codes:
             add_stock(s["code"], s["name"])
     logger.info("Starting scheduler...")
 
