@@ -200,19 +200,59 @@ async def fetch_kline(code: str, days: int = 120):
             return None
 
 
-async def search_stock(keyword: str) -> list[dict]:
-    async with _RATE_LIMIT_SEMAPHORE:
+_STOCK_LIST_CACHE = None
+_STOCK_LIST_CACHE_TIME = 0
+_STOCK_LIST_CACHE_TTL = 3600
+_STOCK_LIST_CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "stock_list_cache.json")
+
+
+async def _get_stock_list() -> list[dict]:
+    global _STOCK_LIST_CACHE, _STOCK_LIST_CACHE_TIME
+    now = datetime.now().timestamp()
+    if _STOCK_LIST_CACHE is not None and now - _STOCK_LIST_CACHE_TIME < _STOCK_LIST_CACHE_TTL:
+        return _STOCK_LIST_CACHE
+
+    if os.path.exists(_STOCK_LIST_CACHE_FILE) and now - os.path.getmtime(_STOCK_LIST_CACHE_FILE) < _STOCK_LIST_CACHE_TTL:
         try:
-            df = await _run_with_retry(ak.stock_zh_a_spot)
-            if df is None or df.empty:
-                return []
-            df["raw_code"] = df["代码"].apply(_strip_prefix)
-            mask = df["raw_code"].str.contains(keyword) | df["名称"].str.contains(keyword)
-            matches = df[mask].head(10)
-            return [
-                {"code": str(r["raw_code"]), "name": str(r["名称"]), "market": ""}
-                for _, r in matches.iterrows()
-            ]
-        except Exception as e:
-            logger.error(f"Search failed for {keyword}: {e}")
+            with open(_STOCK_LIST_CACHE_FILE, "r") as f:
+                _STOCK_LIST_CACHE = json.load(f)
+                _STOCK_LIST_CACHE_TIME = now
+                return _STOCK_LIST_CACHE
+        except Exception:
+            pass
+
+    try:
+        df = await asyncio.wait_for(_run_with_retry(ak.stock_zh_a_spot), timeout=25)
+        if df is None or df.empty:
+            if _STOCK_LIST_CACHE is not None:
+                return _STOCK_LIST_CACHE
             return []
+        df["raw_code"] = df["代码"].apply(_strip_prefix)
+        _STOCK_LIST_CACHE = [
+            {"code": str(r["raw_code"]), "name": str(r["名称"])}
+            for _, r in df.iterrows()
+        ]
+        _STOCK_LIST_CACHE_TIME = now
+        try:
+            os.makedirs(os.path.dirname(_STOCK_LIST_CACHE_FILE), exist_ok=True)
+            with open(_STOCK_LIST_CACHE_FILE, "w") as f:
+                json.dump(_STOCK_LIST_CACHE, f, ensure_ascii=False)
+        except Exception:
+            pass
+    except Exception as e:
+        logger.warning(f"Failed to refresh stock list cache: {e}")
+        if _STOCK_LIST_CACHE is not None:
+            return _STOCK_LIST_CACHE
+        return []
+    return _STOCK_LIST_CACHE
+
+
+async def search_stock(keyword: str) -> list[dict]:
+    stock_list = await _get_stock_list()
+    if not stock_list:
+        return []
+    matches = [
+        s for s in stock_list
+        if keyword in s["code"] or keyword in s["name"]
+    ]
+    return matches[:10]

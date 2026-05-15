@@ -126,6 +126,8 @@ async function searchStock() {
     const q = document.getElementById('searchInput').value.trim();
     if (!q) return;
     const results = document.getElementById('searchResults');
+    results.innerHTML = '<div class="search-result-item" style="color:#5a6a7a;font-size:13px">搜索中...</div>';
+    results.classList.add('active');
 
     try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
@@ -155,6 +157,9 @@ async function searchStock() {
         results.classList.add('active');
     } catch (e) {
         console.error('Search failed:', e);
+        results.innerHTML = '<div class="search-result-item" style="color:#e74c3c;font-size:13px">搜索超时，请重试</div>';
+        results.classList.add('active');
+        setTimeout(() => results.classList.remove('active'), 2000);
     }
 }
 
