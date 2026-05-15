@@ -200,55 +200,25 @@ async def fetch_kline(code: str, days: int = 120):
             return None
 
 
-_STOCK_LIST_CACHE = None
-_STOCK_LIST_CACHE_TIME = 0
-_STOCK_LIST_CACHE_TTL = 3600
-_STOCK_LIST_CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "stock_list_cache.json")
+_STATIC_STOCK_LIST = None
+_STATIC_STOCK_LIST_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "stock_list.json")
 
 
-async def _get_stock_list() -> list[dict]:
-    global _STOCK_LIST_CACHE, _STOCK_LIST_CACHE_TIME
-    now = datetime.now().timestamp()
-    if _STOCK_LIST_CACHE is not None and now - _STOCK_LIST_CACHE_TIME < _STOCK_LIST_CACHE_TTL:
-        return _STOCK_LIST_CACHE
-
-    if os.path.exists(_STOCK_LIST_CACHE_FILE) and now - os.path.getmtime(_STOCK_LIST_CACHE_FILE) < _STOCK_LIST_CACHE_TTL:
-        try:
-            with open(_STOCK_LIST_CACHE_FILE, "r") as f:
-                _STOCK_LIST_CACHE = json.load(f)
-                _STOCK_LIST_CACHE_TIME = now
-                return _STOCK_LIST_CACHE
-        except Exception:
-            pass
-
+def _load_stock_list() -> list[dict]:
+    global _STATIC_STOCK_LIST
+    if _STATIC_STOCK_LIST is not None:
+        return _STATIC_STOCK_LIST
     try:
-        df = await asyncio.wait_for(_run_with_retry(ak.stock_zh_a_spot), timeout=25)
-        if df is None or df.empty:
-            if _STOCK_LIST_CACHE is not None:
-                return _STOCK_LIST_CACHE
-            return []
-        df["raw_code"] = df["代码"].apply(_strip_prefix)
-        _STOCK_LIST_CACHE = [
-            {"code": str(r["raw_code"]), "name": str(r["名称"])}
-            for _, r in df.iterrows()
-        ]
-        _STOCK_LIST_CACHE_TIME = now
-        try:
-            os.makedirs(os.path.dirname(_STOCK_LIST_CACHE_FILE), exist_ok=True)
-            with open(_STOCK_LIST_CACHE_FILE, "w") as f:
-                json.dump(_STOCK_LIST_CACHE, f, ensure_ascii=False)
-        except Exception:
-            pass
+        with open(_STATIC_STOCK_LIST_FILE, "r") as f:
+            _STATIC_STOCK_LIST = json.load(f)
+            return _STATIC_STOCK_LIST
     except Exception as e:
-        logger.warning(f"Failed to refresh stock list cache: {e}")
-        if _STOCK_LIST_CACHE is not None:
-            return _STOCK_LIST_CACHE
+        logger.error(f"Failed to load stock list: {e}")
         return []
-    return _STOCK_LIST_CACHE
 
 
 async def search_stock(keyword: str) -> list[dict]:
-    stock_list = await _get_stock_list()
+    stock_list = await asyncio.get_event_loop().run_in_executor(None, _load_stock_list)
     if not stock_list:
         return []
     matches = [
