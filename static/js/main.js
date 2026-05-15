@@ -592,29 +592,44 @@ async function loadNewsData(code, name) {
 function renderNewsTab(data, name) {
     const sentLabel = data.sentiment_label || '中性';
     const sentSummary = data.sentiment_summary || '';
-    const sentColor = sentLabel === '利好' ? '#2ecc71' : sentLabel === '利空' ? '#e74c3c' : '#7a9abf';
+    const sentColor = sentLabel === '利好' ? '#2ecc71' : sentLabel === '利空' ? '#e74c3c' : sentLabel === '偏多' ? '#5ae0a0' : sentLabel === '偏空' ? '#e67e22' : '#7a9abf';
 
-    const hasNews = data.news && data.news.length > 0;
+    const items = data.analysis_items || [];
     const hasDividend = data.dividend && data.dividend.per_10;
-    const hasConcepts = data.concepts && (data.concepts.industry || data.concepts.concepts?.length);
     const hasFinancial = data.financial;
 
     const sections = [];
 
-    sections.push(`<div class="news-summary">消息面研判 <span style="color:${sentColor};font-weight:600">${sentLabel}</span> ${sentSummary}</div>`);
+    sections.push(`<div class="news-summary" style="border-left:3px solid ${sentColor}">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:600;font-size:14px">📋 综合研判</span>
+            <span style="font-size:12px;padding:2px 10px;border-radius:4px;background:${sentColor}22;color:${sentColor};font-weight:600">${sentLabel}</span>
+        </div>
+        <div style="margin-top:6px;font-size:13px;color:#ccddee;line-height:1.6">${sentSummary}</div>
+    </div>`);
 
-    if (hasNews) {
-        sections.push('<div class="news-section"><div class="news-section-title">📄 近期公告新闻</div>');
-        for (const a of data.news.slice(0, 10)) {
-            const d = a.date || '';
-            const t = a.title || '';
-            const kw = ['业绩', '涨停', '中标', '合同', '增持', '回购', '分红', '送转', '预增', '预减', '亏损', '减持', '处罚', '监管', '解禁'];
-            let tag = '';
-            for (const k of kw) { if (t.includes(k)) { tag = k; break; } }
-            const tagHtml = tag ? `<span class="news-tag">${tag}</span>` : '';
-            sections.push(`<div class="news-item">${tagHtml}<span class="news-date">${d}</span>${t}</div>`);
+    if (items.length > 0) {
+        sections.push('<div class="news-section"><div class="news-section-title">🔍 多维度分析</div>');
+        for (const item of items) {
+            const icon = item.includes('PE') || item.includes('PB') ? '📊' :
+                        item.includes('RSI') || item.includes('技术') || item.includes('缩量') || item.includes('放量') ? '📈' :
+                        item.includes('回撤') || item.includes('信号') || item.includes('低吸') ? '🎯' : '•';
+            sections.push(`<div class="news-item" style="color:#b0c8e0">${icon} ${item}</div>`);
         }
         sections.push('</div>');
+    }
+
+    if (hasFinancial) {
+        const f = data.financial;
+        const finItems = [];
+        if (f.pe != null) finItems.push(`PE ${f.pe}`);
+        if (f.pb != null) finItems.push(`PB ${f.pb}`);
+        if (f.total_mv) finItems.push(`总市值 ¥${(f.total_mv).toFixed(1)}亿`);
+        if (f.turnover_rate) finItems.push(`换手 ${f.turnover_rate}%`);
+        if (f.industry) finItems.push(`行业 ${f.industry}`);
+        if (f.concept) finItems.push(`概念 ${f.concept}`);
+        sections.push(`<div class="news-section"><div class="news-section-title">📊 基本面数据</div>
+            <div style="font-size:12px;color:#c0d0d0;line-height:1.8">${finItems.join(' | ') || '暂无'}</div></div>`);
     }
 
     if (hasDividend) {
@@ -627,27 +642,8 @@ function renderNewsTab(data, name) {
             </div></div>`);
     }
 
-    if (hasConcepts) {
-        const c = data.concepts;
-        sections.push(`<div class="news-section"><div class="news-section-title">🏷️ 行业概念</div>
-            <div class="news-grid">${c.industry ? `<div><strong>行业:</strong> ${c.industry}</div>` : ''}
-            ${c.concepts && c.concepts.length ? `<div><strong>概念:</strong> ${c.concepts.filter(Boolean).join('、')}</div>` : ''}
-            </div></div>`);
-    }
-
-    if (hasFinancial) {
-        const f = data.financial;
-        const finItems = [];
-        if (f.pe != null) finItems.push(`PE ${f.pe}`);
-        if (f.pb != null) finItems.push(`PB ${f.pb}`);
-        if (f.total_mv) finItems.push(`总市值 ¥${(f.total_mv / 1e8).toFixed(1)}亿`);
-        if (f.amplitude) finItems.push(`振幅 ${f.amplitude}%`);
-        sections.push(`<div class="news-section"><div class="news-section-title">📊 基本面数据</div>
-            <div style="font-size:12px;color:#c0d0d0;line-height:1.7">${finItems.join(' | ') || '暂无数据'}</div></div>`);
-    }
-
-    if (!hasNews && !hasDividend && !hasConcepts && !hasFinancial) {
-        sections.push('<div class="tab-loading" style="color:#7a9abf;font-size:13px;padding:20px">消息面数据暂不可用（海外节点到国内金融API受限）<br>当前仅展示技术面分析</div>');
+    if (data.news_unavailable) {
+        sections.push('<div style="margin-top:8px;padding:8px 10px;background:#1a1a2a;border-radius:4px;font-size:11px;color:#5a6a7a">⚠️ 实时新闻数据暂不可用（海外节点限制），研判基于技术面+基本面数据</div>');
     }
 
     return sections.join('');
