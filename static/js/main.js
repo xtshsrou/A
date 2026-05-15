@@ -83,9 +83,6 @@ function generateAnalysis(s) {
     const sortedAsc = [...maVals].sort((a, b) => a - b);
     const allBearish = maVals.length >= 3 && sortedAsc.join(',') === maVals.join(',');
     const allBullish = maVals.length >= 3 && sortedAsc.reverse().join(',') === maVals.join(',');
-    const nearBollLower = boll.lower ? (price - boll.lower) / boll.lower * 100 : null;
-
-    const parts = [];
 
     const level = alert.level || 'normal';
     const score = alert.score || 0;
@@ -96,70 +93,133 @@ function generateAnalysis(s) {
     else { levelLabel = '无信号'; levelIcon = '⚪'; }
 
     let trendSummary = '';
-    if (allBullish) trendSummary = '完全多头排列（均线向上发散，趋势强势）';
-    else if (allBearish) trendSummary = '完全空头排列（跌破所有均线，趋势向下）';
-    else if (ma.ma5 && ma.ma10 && ma.ma5 > ma.ma10) trendSummary = '短多长空（MA5在MA10上方，短线企稳但中长期仍承压）';
-    else if (ma.ma5 && ma.ma10 && ma.ma5 < ma.ma10) trendSummary = '短空长多（MA5在MA10下方，短线偏弱）';
-    else trendSummary = '均线交织，方向不明';
+    if (allBullish) trendSummary = '均线多头排列（MA5>MA10>MA20>MA60），趋势偏强';
+    else if (allBearish) trendSummary = '均线空头排列（MA5<MA10<MA20<MA60），趋势偏弱';
+    else if (ma.ma5 && ma.ma10) {
+        const m5 = ma.ma5, m10 = ma.ma10;
+        const gap = ((m5 - m10) / m10 * 100).toFixed(1);
+        if (m5 > m10) trendSummary = `MA5(${m5})在MA10(${m10})上方（+${gap}%），短线企稳但中长期均线未形成多头`;
+        else trendSummary = `MA5(${m5})在MA10(${m10})下方（${gap}%），短线承压，趋势偏弱`;
+    } else {
+        trendSummary = '均线数据不足，方向不明';
+    }
 
     let bollComment = '';
     if (boll.upper && boll.lower) {
-        if (price >= boll.upper * 0.98) bollComment = '逼近布林上轨，超买区';
-        else if (price <= boll.lower * 1.02) bollComment = '接近布林下轨，处于相对低位';
-        else if (price <= boll.middle) bollComment = '运行于中轨下方，偏弱';
-        else bollComment = '运行于中轨上方，偏强';
+        const pct = ((price - boll.lower) / (boll.upper - boll.lower) * 100).toFixed(0);
+        if (price >= boll.upper * 0.98) bollComment = `触及布林上轨（上轨${boll.upper}），超买区，回调风险较高`;
+        else if (price <= boll.lower * 1.02) bollComment = `接近布林下轨（下轨${boll.lower}），处于相对低位，存在技术支撑`;
+        else if (price <= boll.middle) bollComment = `运行于中轨下方（位置${pct}%分位），偏弱区域`;
+        else bollComment = `运行于中轨上方（位置${pct}%分位），偏强区域`;
     }
 
     let rsiComment = '';
     if (rsi != null) {
-        if (rsi <= 30) rsiComment = '进入超卖区，存在反弹修复动能';
-        else if (rsi <= 40) rsiComment = '接近超卖区，空方力量逐步衰竭';
-        else if (rsi >= 70) rsiComment = '进入超买区，注意回调风险';
-        else if (rsi >= 60) rsiComment = '偏强运行';
-        else rsiComment = '中性区域';
+        if (rsi <= 25) rsiComment = `RSI(${rsi.toFixed(1)})深度超卖，短期反弹概率较高`;
+        else if (rsi <= 30) rsiComment = `RSI(${rsi.toFixed(1)})进入超卖区，空方力量释放，存在修复动能`;
+        else if (rsi <= 40) rsiComment = `RSI(${rsi.toFixed(1)})接近超卖区，空方力量逐步衰竭，但尚未进入超卖极值`;
+        else if (rsi >= 70) rsiComment = `RSI(${rsi.toFixed(1)})进入超买区，短期注意回调风险`;
+        else if (rsi >= 60) rsiComment = `RSI(${rsi.toFixed(1)})偏强运行，短期多头占优`;
+        else rsiComment = `RSI(${rsi.toFixed(1)})中性区域，方向不明`;
     }
 
     let kdjComment = '';
     const jVal = kdj.j;
     if (jVal != null) {
-        if (jVal < 0) kdjComment = 'J值严重超卖，短期空方力量释放';
-        else if (jVal < 20) kdjComment = 'J值偏低，超卖区域';
-        else if (jVal > 100) kdjComment = 'J值过高，超买风险';
-        else if (jVal > 80) kdjComment = 'J值偏高';
-        else kdjComment = '中性';
+        if (jVal < 0) kdjComment = `KDJ(J=${jVal.toFixed(1)})严重超卖，短期存在技术性反弹需求`;
+        else if (jVal < 20) kdjComment = `KDJ(J=${jVal.toFixed(1)})进入超卖区域，底部拐头信号`;
+        else if (jVal > 100) kdjComment = `KDJ(J=${jVal.toFixed(1)})过高，超买风险，注意回调`;
+        else if (jVal > 80) kdjComment = `KDJ(J=${jVal.toFixed(1)})偏高，短期偏强但需注意高位风险`;
+        else kdjComment = `KDJ(J=${jVal.toFixed(1)})中性`;
+    }
+
+    const conflicts = [];
+    const rsiLow = rsi != null && rsi <= 40;
+    const kdjLow = jVal != null && jVal < 20;
+    const rsiHigh = rsi != null && rsi >= 60;
+    const kdjHigh = jVal != null && jVal > 80;
+
+    if (rsiLow && !kdjLow && jVal != null) {
+        conflicts.push(`RSI(${rsi.toFixed(1)})偏空但KDJ(J=${jVal.toFixed(1)})未确认超卖，指标间存在分歧，反弹力度可能有限`);
+    }
+    if (kdjLow && !rsiLow && rsi != null) {
+        conflicts.push(`KDJ(J=${jVal.toFixed(1)})超卖但RSI(${rsi.toFixed(1)})仍处中性，该超卖信号在震荡市中可靠性较低，需等待RSI进入超卖区确认`);
+    }
+    if ((rsiLow || kdjLow) && boll.middle && price > boll.middle) {
+        conflicts.push(`超卖信号与价格位置矛盾——价格仍在中轨(${boll.middle})之上运行，非绝对低位，超卖参考价值需打折`);
+    }
+    if ((rsiLow || kdjLow) && boll.upper && price >= boll.upper * 0.95) {
+        conflicts.push(`价格处于布林上轨附近，与超卖信号严重矛盾，警惕假信号`);
+    }
+    if ((rsiHigh || kdjHigh) && boll.lower && price <= boll.lower * 1.05) {
+        conflicts.push(`价格处于布林下轨附近但指标偏多，出现背离信号，关注价格能否企稳`);
     }
 
     let volComment = '';
     const volRatio = vol.vol_ratio;
+    const isShrinking = vol.is_shrinking;
+    const patLabel = patterns.label || '';
+    const patSignal = patterns.signal || '';
     if (volRatio != null) {
-        if (vol.is_shrinking) volComment = `量能递减中（量比${volRatio}），缩量整理`;
-        else if (volRatio < 0.8) volComment = `缩量（量比${volRatio}），抛压减弱`;
-        else if (volRatio > 1.5) volComment = `放量（量比${volRatio}），资金活跃`;
-        else volComment = `量能正常（量比${volRatio}）`;
+        if (isShrinking && patSignal === '低吸信号') {
+            volComment = `回调期间持续缩量（量比${volRatio}），抛压逐步释放，符合低吸策略的量能条件`;
+        } else if (isShrinking) {
+            volComment = `量能递减（量比${volRatio}），呈缩量整理态势，但当前未处于明确的回调-低吸形态中，需观察支撑位附近能否进一步缩量企稳`;
+        } else if (volRatio < 0.8) {
+            volComment = `当前量比${volRatio}，略低于均量，但回调未连续缩量，抛压未充分释放，不宜急于介入`;
+        } else if (volRatio > 1.5) {
+            volComment = `放量（量比${volRatio}），资金活跃度较高，若价格下跌则为放量下跌需警惕`;
+        } else {
+            volComment = `量比${volRatio}，量能正常，无明显缩量或放量特征，观望为主`;
+        }
     }
 
     const retrace60d = retrace.retrace_60d;
     let retraceComment = '';
     if (retrace60d != null) {
-        if (retrace60d >= 30) retraceComment = '深度回撤，超跌反弹预期较强';
-        else if (retrace60d >= 20) retraceComment = '中期回调中，关注支撑确认';
-        else if (retrace60d >= 10) retraceComment = '小幅回调，趋势尚可';
-        else retraceComment = '接近60日高点，趋势偏强';
+        if (retrace60d >= 30) {
+            retraceComment = `距60日高点已回撤${retrace60d}%，深度回调，超跌区，关注支撑确认后的反弹机会`;
+        } else if (retrace60d >= 20) {
+            retraceComment = `距60日高点回撤${retrace60d}%，中期回调幅度较深，关注关键支撑位的企稳信号`;
+        } else if (retrace60d >= 10) {
+            retraceComment = `距60日高点回撤${retrace60d}%，短线回调中，尚未进入深度超跌区`;
+        } else {
+            retraceComment = `距60日高点仅回撤${retrace60d}%，接近阶段高位，趋势偏强，不构成低吸条件`;
+        }
     }
 
-    const patLabel = patterns.label || '';
-    const patSignal = patterns.signal || '';
     let conclusion = '';
     if (patSignal === '低吸信号') {
-        conclusion = `当前触发「${patLabel}」低吸信号，支撑位附近缩量企稳，符合买入条件。建议分仓介入，以支撑位下方${patLabel === '短线回调' ? '3%' : '5%'}设止损。`;
+        const cond = [];
+        if (isShrinking) cond.push('✅ 回调缩量');
+        else cond.push('❌ 量能未萎缩');
+        if (allBullish || (ma.ma5 && ma.ma10 && ma.ma5 > ma.ma10)) cond.push('✅ 均线支撑');
+        else cond.push('❌ 均线破位');
+        if (rsiLow || kdjLow) cond.push('✅ 技术超卖');
+        else cond.push('❌ 未超卖');
+        if (boll.lower && price <= boll.lower * 1.03) cond.push('✅ 接近下轨');
+        else if (boll.lower) cond.push('❌ 远离下轨');
+
+        const pass = cond.filter(c => c.startsWith('✅')).length;
+        if (pass >= 3) {
+            conclusion = `触发「${patLabel}」低吸信号，条件验证（${pass}/4）：${cond.join(' | ')}。多数条件满足，可考虑分批介入，以支撑位下方${patLabel === '短线回调' ? '3%' : '5%'}设止损。`;
+        } else {
+            conclusion = `触发「${patLabel}」低吸信号但条件不完整（${pass}/4）：${cond.join(' | ')}。仅部分条件满足，建议等待更多确认信号再介入。`;
+        }
     } else if (alert.score >= 60) {
-        conclusion = '多项技术指标共振，回调进入价值区域，但缺乏「量能验证」。建议等待缩量企稳信号确认后再评估。';
+        const features = [];
+        if (isShrinking) features.push('量能偏弱');
+        if (rsiLow || kdjLow) features.push('技术面偏空');
+        if (boll.lower && price <= boll.lower * 1.05) features.push('价格低位');
+        conclusion = `综合评分${score}，但缺乏明确的低吸形态触发。当前特征：${features.join('、') || '无明显特征'}。不满足「拉升-回调缩量-支撑位企稳」的完整条件链，建议继续观察。`;
     } else if (rsi != null && rsi <= 40) {
-        conclusion = '当前仅满足"技术超卖"条件，不符合「缩量回调+回踩关键支撑」的强信号标准。反弹大概率为修复性脉冲，非趋势低吸机会，建议观望。';
+        conclusion = `仅RSI(${rsi.toFixed(1)})单一指标偏空，未形成多重确认。不符合策略要求的「缩量回调+回踩关键支撑+技术超卖」三重条件，反弹大概率是修复性脉冲，建议观望。`;
+    } else if (rsi != null && rsi >= 60) {
+        conclusion = 'RSI偏强运行，价格处于相对高位，不符合回调低吸策略的介入条件，等待回调后的机会。';
     } else if (allBearish) {
-        conclusion = '均线空头排列，趋势偏弱，不建议左侧抄底。等待底部放量企稳信号出现后再评估。';
+        conclusion = '均线空头排列，趋势偏弱，回调低吸策略不建议在下跌趋势中左侧抄底。等待底部放量企稳、短期均线拐头后再评估。';
     } else {
-        conclusion = '当前无明确信号。等待拉升-回调形态形成后再评估低吸机会。';
+        conclusion = '当前无明确信号。等待「拉升—回调—缩量企稳」的完整形态形成后再评估低吸机会。';
     }
 
     return {
@@ -167,7 +227,7 @@ function generateAnalysis(s) {
         trendSummary, bollComment,
         rsiComment, kdjComment,
         volComment, retraceComment,
-        conclusion,
+        conclusion, conflicts,
         maShort: ma.ma5 != null && ma.ma10 != null,
     };
 }
@@ -451,6 +511,11 @@ async function showDetail(code) {
                     <div><strong>量能:</strong> ${a.volComment}</div>
                     <div><strong>回撤:</strong> ${a.retraceComment}</div>
                 </div>
+                ${a.conflicts && a.conflicts.length > 0 ? `
+                <div style="margin-top:10px;padding:8px 10px;background:#2a1a1a;border-radius:4px;border-left:3px solid #e67e22;font-size:12px;line-height:1.7">
+                    <div style="font-weight:600;color:#e67e22;margin-bottom:4px">⚠️ 信号矛盾点</div>
+                    ${a.conflicts.map(c => `<div style="color:#dda">• ${c}</div>`).join('')}
+                </div>` : ''}
                 <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a3a4a;font-size:13px;color:#ccddee">
                     <strong>结论:</strong> ${a.conclusion}
                 </div>
