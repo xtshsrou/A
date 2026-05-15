@@ -187,9 +187,15 @@ async function addToWatchlist(code, name) {
         const res = await fetch(`/api/watchlist/add?code=${code}&name=${encodeURIComponent(name)}`, { method: 'POST' });
         const data = await res.json();
         if (data.success) {
-            showToast(`✅ 已添加 ${name}(${code})`, 'success');
+            showToast(`✅ 已添加 ${name}(${code})，等待数据加载...`, 'success');
             document.getElementById('searchInput').value = '';
-            await loadData();
+            for (let i = 0; i < 20; i++) {
+                await loadData();
+                const stock = stocks.find(s => s.code === code);
+                if (stock && (stock.quote || stock.indicators)) break;
+                await new Promise(r => setTimeout(r, 2000));
+            }
+            showToast(`✅ ${name}(${code}) 数据已加载`, 'success');
         } else if (res.status === 400) {
             showToast(`⚠️ ${name} 已在自选股中`, 'error');
         } else {
